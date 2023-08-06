@@ -46,7 +46,7 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   try:
     var dataArr = reqData.split(" ")
     var data = ""
-    echo $dataArr
+    #echo $dataArr
     if dataArr.len >= 3:
       data = dataArr[2..dataArr.len - 1].join(" ")
       #raise newException(ParseError, "Invalid request part")
@@ -55,18 +55,18 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
     queueReq.topic = dataArr[1]
     case dataArr[0]
     of $QueueCommand.GET:
-      echo "GETTING"
+      #echo "GETTING"
       queueReq.command = GET
       queueReq.data = none(string)
     of $QueueCommand.PUT:
-      echo "PUTTING"
+      #echo "PUTTING"
       queueReq.command = PUT
       queueReq.data = some(data)
     of $QueueCommand.CLEAR:
-      echo "CLEARING"
+      #echo "CLEARING"
       queueReq.command = CLEAR
     of $QueueCommand.NEW:
-      echo "NEWING"
+      #echo "NEWING"
       queueReq.command = NEW
     else:
       echo "OH NOOO"
@@ -74,6 +74,7 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   except ParseError:
     let e = getCurrentException()
     echo "Failed to parse command: " & e.msg
+    echo "request data:", $reqData
 
   return queueReq
 
@@ -106,6 +107,7 @@ proc processRequest(server: QueueServer, connection: Socket, request: QueueReque
         queueResp.status = "ok"
         queueResp.message = "successfully enqueue to " & request.topic
         queueResp.data = $numberOfMsg
+        echo "sucess..."
       else:
         raise newException(ProcessError, "No data to enqueue")
     of QueueCommand.CLEAR:
@@ -127,16 +129,16 @@ proc processRequest(server: QueueServer, connection: Socket, request: QueueReque
     queueResp.status = "error"
     queueResp.message = "Failed to process request: " & e.msg
     queueResp.data = ""
+    echo $request
 
 
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
     var recvLine = client.recvLine()
-    var request = server.parseRequest(recvLine)
-    #echo $request
-    #sleep(1)
-    server.processRequest(client, request)
-    #sync()
-
+    if recvLine.len > 0:
+      var request = server.parseRequest(recvLine)
+      server.processRequest(client, request)
+    else:
+      echo "Invalid request: ", recvLine
 
 
 proc start* (server: QueueServer): void =
@@ -148,12 +150,13 @@ proc start* (server: QueueServer): void =
   while true:
     var client: Socket
     socket.acceptAddr(client, address)
-    echo "Cliented connected from: ", address
+    #echo "Cliented connected from: ", address
     spawn server.execute(client)
     #let recvData = client.recvLine()
     #var recvdata = client.recv(1024)
     #echo "received: \n", recvData
-
+  
+  sync()
   socket.close()
 
 

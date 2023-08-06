@@ -23,8 +23,8 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
     return result
   #echo "looking for: |", topicName ,"|"
   for q in 0..self.topics.len - 1: 
-    echo "topic seq", q
-    echo $self.topics[q].name
+    #echo "topic seq", q
+    #echo $self.topics[q].name
     if self.topics[q].name() == topicName:
       result = some(self.topics[q])
       break
