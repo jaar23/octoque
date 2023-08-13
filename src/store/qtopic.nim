@@ -42,10 +42,21 @@ proc send* (qtopic: ref QTopic, data: string): void =
   qtopic.qchannel.send(data)
 
 
+proc clear* (qtopic: ref QTopic): bool = 
+  withLock lock:
+    qtopic.store.close()
+    qtopic.store.open()
+    return qtopic.store.ready()
+
+
 proc listen* (qtopic: ref QTopic): void {.thread.} = 
-  while qtopic.qchannel.peek() > 0:
+  echo $getThreadId() & ": " & qtopic.name & " is listening"
+  while true:
+  # while qtopic.qchannel.peek() > 0:
     let recvData = qtopic.qchannel.recv()
+    #echo "recv Data: " & recvData
     qtopic.storeData(recvData)
+    echo $getThreadId() & " processed message"
 
 # proc listen* (qtopic: ref QTopic, handler: (socket: Socket, data: string) -> bool): void =
 #   echo qtopic.name & " is listening..."

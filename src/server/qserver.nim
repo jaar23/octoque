@@ -1,5 +1,6 @@
 import ../store/queue
-import std/[net, options, strutils, strformat], threadpool
+import std/[net, options, strutils, strformat]
+import std/asyncdispatch, std/asyncnet
 
 
 type 
@@ -28,11 +29,11 @@ type
   ParseError* = object of CatchableError
   ProcessError* = object of CatchableError
 
-proc initQueueServer* (address: string, port: int, topics: varargs[string]): QueueServer =
+proc initQueueServer* (address: string, port: int, topics: varargs[string], workerNumber: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   var queue = initQueue(topics)
   qserver.queue = queue
-  qserver.queue.startListener()
+  qserver.queue.startListener(workerNumber)
   return qserver
 
 
@@ -79,16 +80,17 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   return queueReq
 
 
-proc processRequest(server: QueueServer, connection: Socket, request: QueueRequest): void = 
+proc processRequest(server: QueueServer, connection: AsyncSocket, request: QueueRequest) {.async.}= 
   var queueResp = QueueResponse()
   defer:
-    connection.send(queueResp.toStrResponse())
+    await connection.send(queueResp.toStrResponse())
     connection.close()
 
   try:
     case request.command
     of QueueCommand.GET:
       let dataOpt = server.queue.dequeue(request.topic)
+      echo $dataOpt
       if dataOpt.isSome:
         queueResp.code = 0
         queueResp.status = "ok"
@@ -111,10 +113,17 @@ proc processRequest(server: QueueServer, connection: Socket, request: QueueReque
       else:
         raise newException(ProcessError, "No data to enqueue")
     of QueueCommand.CLEAR:
-      echo "not implemented"
+      # echo "not implemented"
+      let cleared = server.queue.clearqueue(request.topic)
       queueResp.code = 0
-      queueResp.status = "error"
-      queueResp.message = "not implemented"
+      queueResp.status = if cleared.isSome: $cleared.get else: $false
+      if cleared.isSome: 
+        if cleared.get == true: 
+          queueResp.message = "store resetted" 
+        else: 
+          queueResp.message = "failed to reset store" 
+      else: 
+        queueResp.message = "failed to reset store, queue topic might not exist"
     of QueueCommand.NEW:
       echo "not implemented"
       queueResp.code = 0
@@ -132,31 +141,29 @@ proc processRequest(server: QueueServer, connection: Socket, request: QueueReque
     echo $request
 
 
-proc execute(server: QueueServer, client: Socket): void {.thread.} =
-    var recvLine = client.recvLine()
+proc execute(server: QueueServer, client: AsyncSocket) {.thread async.} =
+    var recvLine = await client.recvLine()
     if recvLine.len > 0:
       var request = server.parseRequest(recvLine)
-      server.processRequest(client, request)
-    else:
-      echo "Invalid request: ", recvLine
+      await server.processRequest(client, request)
+    #else:
+      #echo "Invalid request: ", recvLine
 
 
-proc start* (server: QueueServer): void =
-  let socket = newSocket()
+proc start* (server: QueueServer) {.async.} =
+  var socket = newAsyncSocket(buffered=false)
+  socket.setSockOpt(OptReuseAddr, true)
   socket.bindAddr(Port(server.port))
   socket.listen()
 
   var address = server.address
   while true:
-    var client: Socket
-    socket.acceptAddr(client, address)
+    var client: AsyncSocket = await socket.accept()
+    #await socket.acceptAddr(client, address)
     #echo "Cliented connected from: ", address
-    spawn server.execute(client)
-    #let recvData = client.recvLine()
-    #var recvdata = client.recv(1024)
-    #echo "received: \n", recvData
+    await server.execute(client)
   
-  sync()
+  #sync()
   socket.close()
 
 

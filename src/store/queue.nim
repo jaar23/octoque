@@ -22,7 +22,7 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
   if topicName == "":
     return result
   #echo "looking for: |", topicName ,"|"
-  for q in 0..self.topics.len - 1: 
+  for q in 0.. self.topics.len - 1: 
     #echo "topic seq", q
     #echo $self.topics[q].name
     if self.topics[q].name() == topicName:
@@ -54,9 +54,17 @@ proc dequeue* (self: ref Queue, topicName: string): Option[string] =
     return none(string)
 
 
-proc startListener* (queue: ref Queue): void = 
+proc clearqueue* (queue: ref Queue, topicName: string): Option[bool] = 
+  var topic: Option[ref QTopic] = queue.find(topicName)
+  if topic.isSome:
+    let cleared = topic.get.clear()
+    return some(cleared)
+  else:
+    return none(bool)
+
+
+proc startListener* (queue: ref Queue, numOfThread: int = 3): void = 
   #echo "topic size: ", queue.topics.len
   for t in 0.. queue.topics.len - 1:
-    #echo t
-    spawn queue.topics[t].listen()
-
+    for n in 0.. numOfThread - 1:
+      spawn queue.topics[t].listen()

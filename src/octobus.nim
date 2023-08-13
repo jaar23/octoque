@@ -1,15 +1,21 @@
 import 
   server/qserver
+import asyncdispatch
 
 # proc closureProc (x: int, y: int): int =
 #   return x + y
+proc main() {.async.} = 
+  var topics = @["default", "alter"]
+  let server = initQueueServer("127.0.0.1", 6789, topics, 2)
+  await server.start()
+  
 
 when isMainModule:
-  echo("Hello, octobus!")
+  echo "octobus is started at 127.0.0.1:6789"
+  asyncCheck main()
+  runForever()
+  echo "Server terminated"
   #testClosure(5, closureProc)
-  var topics = @["default", "alter"]
-  let server = initQueueServer("127.0.0.1", 6789, topics)
-  server.start()
   # var qtopic = initQTopic("default")
   # var qtopic2 = initQTopic("alter")
   # let startTime = cpuTime()
