@@ -1,10 +1,10 @@
 import std/options, std/net, std/locks
+import topic
 
 var 
   lock: Lock
 
-type QTopic* = object
-  name: string
+type QTopic* = ref object of Topic
   qchannel: Channel[string]
   store {.guard: lock}: Channel[string]
   capacity: int
@@ -53,7 +53,7 @@ proc listen* (qtopic: ref QTopic): void {.thread.} =
   echo $getThreadId() & ": " & qtopic.name & " is listening"
   while true:
   # while qtopic.qchannel.peek() > 0:
-    let recvData = qtopic.qchannel.recv()
+    let recvData = qtopic.channel.recv()
     #echo "recv Data: " & recvData
     qtopic.storeData(recvData)
     echo $getThreadId() & " processed message"
@@ -74,13 +74,17 @@ proc size* (self: ref QTopic): int =
 
 proc initQTopic* (name: string, capacity: int): ref QTopic = 
   withLock lock:
-    var qtopic = (ref QTopic)(name: name)
+    var qtopic: ref QTopic 
+    qtopic = new (ref QTopic)
+    qtopic.name = name
     qtopic.store.open(capacity)
     return qtopic
 
 
 proc initQTopicUnlimited* (name: string): ref QTopic = 
-  var qtopic = (ref QTopic)(name: name)
+  var qtopic: ref QTopic
+  qtopic = new (ref QTopic)
+  qtopic.name = name
   qtopic.qchannel.open()
   withLock lock:
     qtopic.store.open()

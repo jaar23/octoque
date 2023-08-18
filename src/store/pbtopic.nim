@@ -1,12 +1,10 @@
 import std/[asyncnet, asyncdispatch]
-import subscriber, threadpool, qtopic
+import subscriber, threadpool, topic
 
 type
-  PubSubTopic* = object
+  PubSubTopic* = ref object of Topic
     subscriptions: seq[Subscriber]
-    name: string
     store: Channel[string]
-    pbchannel: Channel[string]
 
 
 proc name* (pbtopic: ref PubSubTopic): string =
@@ -24,6 +22,6 @@ proc publish* (pbtopic: ref PubSubTopic, data: string) {.async.} =
 
 proc listen* (pbtopic: ref PubSubTopic) {.thread async.} =
   while true:
-    let recvData = pbtopic.pbchannel.recv()
+    let recvData = pbtopic.channel.recv()
     await pbtopic.publish(recvData)
     echo "published"

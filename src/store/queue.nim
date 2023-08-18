@@ -1,12 +1,12 @@
-import qtopic, std/options, threadpool, pbtopic
+import qtopic, std/options, threadpool, topic
 
 type QueueState = enum
   RUNNING,PAUSED,STOPPED,STARTED
 
 
 type Queue* = object
-  topics*: seq[ref QTopic]
-  pbtopics*: seq[ref PubSubTopic]
+  topics*: seq[ref Topic | ref QTopic]
+  #pbtopics*: seq[ref PubSubTopic]
   state: QueueState
 
 
@@ -26,7 +26,7 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
   for q in 0.. self.topics.len - 1: 
     #echo "topic seq", q
     #echo $self.topics[q].name
-    if self.topics[q].name() == topicName:
+    if self.topics[q].name == topicName:
       result = some(self.topics[q])
       break
   
