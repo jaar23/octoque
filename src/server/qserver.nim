@@ -115,7 +115,7 @@ proc processRequest(server: QueueServer, connection: AsyncSocket, request: Queue
     of QueueCommand.CLEAR:
       # echo "not implemented"
       let cleared = server.queue.clearqueue(request.topic)
-      queueResp.code = 0
+      queueResp.code = if cleared.isSome: 0 else: 4
       queueResp.status = if cleared.isSome: $cleared.get else: $false
       if cleared.isSome: 
         if cleared.get == true: 

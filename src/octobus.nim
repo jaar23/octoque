@@ -4,6 +4,9 @@ import asyncdispatch
 
 # proc closureProc (x: int, y: int): int =
 #   return x + y
+#
+
+## TODO: init from config file
 proc main() {.async.} = 
   var topics = @["default", "alter"]
   let server = initQueueServer("127.0.0.1", 6789, topics, 2)

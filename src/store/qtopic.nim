@@ -9,8 +9,8 @@ type QTopic* = object
   store {.guard: lock}: Channel[string]
   capacity: int
 
-proc name* (self: ref QTopic): string = 
-  return self.name
+proc name* (qtopic: ref QTopic): string = 
+  return qtopic.name
 
 
 proc storeData (qtopic: ref QTopic, data: string): void = 
