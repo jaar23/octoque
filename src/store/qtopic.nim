@@ -82,8 +82,7 @@ proc initQTopic* (name: string, capacity: int): ref QTopic =
 
 
 proc initQTopicUnlimited* (name: string): ref QTopic = 
-  var qtopic: ref QTopic
-  qtopic = new (ref QTopic)
+  var qtopic: ref QTopic = new (ref QTopic)
   qtopic.name = name
   qtopic.qchannel.open()
   withLock lock:

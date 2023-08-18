@@ -1,12 +1,12 @@
-import qtopic, std/options, threadpool, topic
+import qtopic, std/options, threadpool, pbtopic
 
 type QueueState = enum
   RUNNING,PAUSED,STOPPED,STARTED
 
 
 type Queue* = object
-  topics*: seq[ref Topic | ref QTopic]
-  #pbtopics*: seq[ref PubSubTopic]
+  topics*: seq[ref QTopic]
+  pbtopics*: seq[ref PubSubTopic]
   state: QueueState
 
 
