@@ -2,9 +2,16 @@ import std/[asyncnet, asyncdispatch]
 import subscriber, threadpool, topic
 
 type
-  PubSubTopic* = ref object of Topic
+  PubSubTopic* = object of Topic
     subscriptions: seq[Subscriber]
     store: Channel[string]
+
+
+proc initPubSubTopic* (name: string): ref PubSubTopic =
+  var pbtopic = (ref PubSubTopic)(name: name)
+  pbtopic.channel.open()
+  pbtopic.store.open()
+  return pbtopic
 
 
 proc name* (pbtopic: ref PubSubTopic): string =

@@ -4,7 +4,7 @@ import topic
 var 
   lock: Lock
 
-type QTopic* = ref object of Topic
+type QTopic* = object of Topic
   qchannel: Channel[string]
   store {.guard: lock}: Channel[string]
   capacity: int
@@ -74,16 +74,13 @@ proc size* (self: ref QTopic): int =
 
 proc initQTopic* (name: string, capacity: int): ref QTopic = 
   withLock lock:
-    var qtopic: ref QTopic 
-    qtopic = new (ref QTopic)
-    qtopic.name = name
+    var qtopic: ref QTopic = (ref QTopic)(name: name)
     qtopic.store.open(capacity)
     return qtopic
 
 
 proc initQTopicUnlimited* (name: string): ref QTopic = 
-  var qtopic: ref QTopic = new (ref QTopic)
-  qtopic.name = name
+  var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.qchannel.open()
   withLock lock:
     qtopic.store.open()
