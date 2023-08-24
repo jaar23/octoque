@@ -3,16 +3,13 @@
 type
   Topic* = object of RootObj
     name*: string
-    channel*: Channel[string]
+    channel: Channel[string]
 
 
-# proc `name=`* (t: ref Topic, name: string) {.inline.}= 
-#   t.name = name
-#
-#
-# proc name* (topic: ref Topic): string {.inline.} = 
-#   return topic.name
+proc start* (topic: ref Topic) {.inline.} = topic.channel.open()
 
 
-proc queueInChannel* (topic: ref Topic): int =
-  return topic.channel.peek()
+proc readNext* (topic: ref Topic): string {.inline.} = topic.channel.recv()
+
+
+proc peek* (topic: ref Topic): int {.inline.} = topic.channel.peek()

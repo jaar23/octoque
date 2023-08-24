@@ -4,7 +4,7 @@ import uuid4
 type
   Subscriber* = object
     connection: AsyncSocket
-    connectionId: Uuid
+    connectionId*: Uuid
 
 
 proc newSubscriber* (conn: AsyncSocket): Subscriber =

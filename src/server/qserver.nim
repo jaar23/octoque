@@ -1,4 +1,4 @@
-import ../store/queue
+import ../store/queue, ../store/qtopic
 import std/[net, options, strutils, strformat]
 import std/asyncdispatch, std/asyncnet
 
@@ -14,6 +14,7 @@ type
     address: string
     port: int
     queue: ref Queue
+    running: bool
 
   QueueRequest = object
     command: QueueCommand
@@ -29,12 +30,25 @@ type
   ParseError* = object of CatchableError
   ProcessError* = object of CatchableError
 
+
+proc newQueueServer* (address: string, port: int): QueueServer =
+  var qserver = QueueServer(address: address, port: port)
+  qserver.queue = newQueue()
+  qserver.running = false
+  return qserver
+
+
 proc initQueueServer* (address: string, port: int, topics: varargs[string], workerNumber: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   var queue = initQueue(topics)
   qserver.queue = queue
   qserver.queue.startListener(workerNumber)
+  qserver.running = true
   return qserver
+
+
+proc addQueueTopic* (qserver: QueueServer, topicName: string, connType: ConnectionType = BROKER, capacity: int = 0): void =
+  qserver.queue.addTopic(topicName, connType, capacity)
 
 
 proc toStrResponse(resp: QueueResponse): string = 
@@ -151,6 +165,8 @@ proc execute(server: QueueServer, client: AsyncSocket) {.thread async.} =
 
 
 proc start* (server: QueueServer) {.async.} =
+  if server.running == false:
+    server.queue.startListener()
   var socket = newAsyncSocket(buffered=false)
   socket.setSockOpt(OptReuseAddr, true)
   socket.bindAddr(Port(server.port))

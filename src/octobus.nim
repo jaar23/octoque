@@ -1,5 +1,5 @@
 import 
-  server/qserver
+  server/qserver, store/qtopic
 import asyncdispatch
 
 # proc closureProc (x: int, y: int): int =
@@ -9,7 +9,11 @@ import asyncdispatch
 ## TODO: init from config file
 proc main() {.async.} = 
   var topics = @["default", "alter"]
-  let server = initQueueServer("127.0.0.1", 6789, topics, 2)
+  var pbtopics = @[""]
+  #let server = initQueueServer("127.0.0.1", 6789, topics, 2)
+  let server = newQueueServer("127.0.0.1", 6789)
+  server.addQueueTopic("default")
+  server.addQueueTopic("pubsub", PUBSUB)
   await server.start()
   
 

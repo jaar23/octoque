@@ -8,8 +8,9 @@ type
 
 
 proc initPubSubTopic* (name: string): ref PubSubTopic =
-  var pbtopic = (ref PubSubTopic)(name: name)
-  pbtopic.channel.open()
+  var pbtopic = (ref PubSubTopic)()
+  pbtopic.name= name
+  pbtopic.start()
   pbtopic.store.open()
   return pbtopic
 
@@ -19,6 +20,7 @@ proc name* (pbtopic: ref PubSubTopic): string =
 
 
 proc subscribe* (pbtopic: ref PubSubTopic, subscriber: Subscriber): void = 
+  echo "new subscriber: " & $subscriber.connectionId
   pbtopic.subscriptions.add(subscriber)
 
 
@@ -28,7 +30,8 @@ proc publish* (pbtopic: ref PubSubTopic, data: string) {.async.} =
 
 
 proc listen* (pbtopic: ref PubSubTopic) {.thread async.} =
+  echo $getThreadId() & "is listening for pubsub connection"
   while true:
-    let recvData = pbtopic.channel.recv()
+    let recvData = pbtopic.readNext()
     await pbtopic.publish(recvData)
     echo "published"

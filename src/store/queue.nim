@@ -1,14 +1,20 @@
-import qtopic, std/options, threadpool, pbtopic
+import qtopic, std/options, threadpool, pbtopic, subscriber
 
 type QueueState = enum
   RUNNING,PAUSED,STOPPED,STARTED
 
 
-type Queue* = object
-  topics*: seq[ref QTopic]
-  pbtopics*: seq[ref PubSubTopic]
-  state: QueueState
+type
+  Queue* = object
+    topics*: seq[ref QTopic]
+    #pbtopics*: seq[ref PubSubTopic]
+    state: QueueState
 
+
+proc newQueue* (): ref Queue =
+  var queue = (ref Queue)(state: QueueState.STARTED)
+  queue.topics = newSeq[ref QTopic]()
+  return queue
 
 proc initQueue* (topicNames: varargs[string]): ref Queue =
   var queue = (ref Queue)(state:QueueState.STARTED)
@@ -16,6 +22,23 @@ proc initQueue* (topicNames: varargs[string]): ref Queue =
     var topic = qtopic.initQTopicUnlimited(name)
     queue.topics.add(topic)
   return queue
+
+proc initQueue* (topics: varargs[ref QTopic]): ref Queue =
+  var queue = (ref Queue)(state: QueueState.STARTED)
+  for topic in items(topics):
+    queue.topics.add(topic)
+  return queue
+
+
+proc addTopic* (queue: ref Queue, topic: ref QTopic): void = queue.topics.add(topic)
+
+proc addTopic* (queue: ref Queue, topicName: string, connType: ConnectionType = BROKER, capacity: int = 0): void =
+  if capacity > 0:
+    var qtopic = initQTopic(topicName, capacity, connType)
+    queue.topics.add(qtopic)
+  else:
+    var qtopic = initQTopicUnlimited(topicName, connType)
+    queue.topics.add(qtopic)
 
 
 proc find (self: ref Queue, topicName: string): Option[ref QTopic] = 
@@ -29,7 +52,6 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
     if self.topics[q].name == topicName:
       result = some(self.topics[q])
       break
-  
 
 
 proc enqueue* (self: ref Queue, topicName: string, data: string): Option[int] = 
@@ -65,7 +87,12 @@ proc clearqueue* (queue: ref Queue, topicName: string): Option[bool] =
 
 
 proc startListener* (queue: ref Queue, numOfThread: int = 3): void = 
-  #echo "topic size: ", queue.topics.len
   for t in 0.. queue.topics.len - 1:
-    for n in 0.. numOfThread - 1:
-      spawn queue.topics[t].listen()
+    if queue.topics[t].connectionType == ConnectionType.PUBSUB:
+      discard spawn queue.topics[t].pblisten()
+    else:
+      for n in 0.. numOfThread - 1:
+        spawn queue.topics[t].listen()
+
+
+
