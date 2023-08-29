@@ -1,4 +1,4 @@
-import 
+import
   server/qserver, store/qtopic
 import asyncdispatch
 
@@ -7,20 +7,19 @@ import asyncdispatch
 #
 
 ## TODO: init from config file
-proc main() {.async.} = 
+proc main() =
   var topics = @["default", "alter"]
-  var pbtopics = @[""]
+  #var pbtopics = @[""]
   #let server = initQueueServer("127.0.0.1", 6789, topics, 2)
   let server = newQueueServer("127.0.0.1", 6789)
   server.addQueueTopic("default")
   server.addQueueTopic("pubsub", PUBSUB)
-  await server.start()
-  
+  server.start()
+
 
 when isMainModule:
   echo "octobus is started at 127.0.0.1:6789"
-  asyncCheck main()
-  runForever()
+  main()
   echo "Server terminated"
   #testClosure(5, closureProc)
   # var qtopic = initQTopic("default")

@@ -1,14 +1,17 @@
 import ../store/queue, ../store/qtopic
 import std/[net, options, strutils, strformat]
 import std/asyncdispatch, std/asyncnet
+import threadpool
 
-
-type 
+type
   QueueCommand* = enum
     GET = "GET",
     PUT = "PUT",
     CLEAR = "CLEAR",
-    NEW = "NEW"
+    NEW = "NEW",
+    SUB = "SUB",
+    PUB = "PUB",
+    COUNT = "COUNT"
 
   QueueServer* = object
     address: string
@@ -21,7 +24,7 @@ type
     topic: string
     data: Option[string]
 
-  QueueResponse = object
+  QueueResponse* = object
     status: string
     code: int
     message: string
@@ -31,14 +34,15 @@ type
   ProcessError* = object of CatchableError
 
 
-proc newQueueServer* (address: string, port: int): QueueServer =
+proc newQueueServer*(address: string, port: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   qserver.queue = newQueue()
   qserver.running = false
   return qserver
 
 
-proc initQueueServer* (address: string, port: int, topics: varargs[string], workerNumber: int): QueueServer =
+proc initQueueServer*(address: string, port: int, topics: varargs[string],
+    workerNumber: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   var queue = initQueue(topics)
   qserver.queue = queue
@@ -47,16 +51,26 @@ proc initQueueServer* (address: string, port: int, topics: varargs[string], work
   return qserver
 
 
-proc addQueueTopic* (qserver: QueueServer, topicName: string, connType: ConnectionType = BROKER, capacity: int = 0): void =
+proc addQueueTopic*(qserver: QueueServer, topicName: string,
+    connType: ConnectionType = BROKER, capacity: int = 0): void =
   qserver.queue.addTopic(topicName, connType, capacity)
 
 
-proc toStrResponse(resp: QueueResponse): string = 
+proc newQueueResponse* (status: string, code: int, message: string, data: string): QueueResponse =
+  var queueResp = QueueResponse()
+  queueResp.code = 0
+  queueResp.status = "ok"
+  queueResp.message = "push to subscriber"
+  queueResp.data = data
+  return queueResp
+
+
+proc toStrResponse*(resp: QueueResponse): string =
   var respStr = &"status {resp.status}\r\ncode {resp.code}\r\nmessage {resp.message}\r\n{resp.data}"
   return respStr
 
 
-proc parseRequest(server: QueueServer, reqData: string): QueueRequest = 
+proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   var queueReq = QueueRequest()
   try:
     var dataArr = reqData.split(" ")
@@ -64,25 +78,29 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
     #echo $dataArr
     if dataArr.len >= 3:
       data = dataArr[2..dataArr.len - 1].join(" ")
-      #raise newException(ParseError, "Invalid request part")
     elif dataArr.len <= 1:
       raise newException(ParseError, "Invalid request part")
+
     queueReq.topic = dataArr[1]
     case dataArr[0]
     of $QueueCommand.GET:
-      #echo "GETTING"
       queueReq.command = GET
-      queueReq.data = none(string)
+      queueReq.data = some(data)
     of $QueueCommand.PUT:
-      #echo "PUTTING"
       queueReq.command = PUT
       queueReq.data = some(data)
     of $QueueCommand.CLEAR:
-      #echo "CLEARING"
       queueReq.command = CLEAR
     of $QueueCommand.NEW:
-      #echo "NEWING"
       queueReq.command = NEW
+    of $QueueCommand.PUB:
+      echo "new publish.."
+      queueReq.command = PUB
+      queueReq.data = some(data)
+    of $QueueCommand.SUB:
+      queueReq.command = SUB
+    of $QueueCommand.COUNT:
+      queueReq.command = COUNT
     else:
       echo "OH NOOO"
       raise newException(ParseError, "Invalid queue command")
@@ -94,22 +112,30 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   return queueReq
 
 
-proc processRequest(server: QueueServer, connection: AsyncSocket, request: QueueRequest) {.async.}= 
+proc processRequest(server: QueueServer, connection: Socket,
+    request: QueueRequest): void  =
   var queueResp = QueueResponse()
   defer:
-    await connection.send(queueResp.toStrResponse())
+    if queueResp.status != "disconnected":
+      connection.send(queueResp.toStrResponse())
     connection.close()
 
   try:
     case request.command
     of QueueCommand.GET:
-      let dataOpt = server.queue.dequeue(request.topic)
-      echo $dataOpt
-      if dataOpt.isSome:
+      let batchNum: int = if request.data.get != "": request.data.get.parseInt() else: 1
+      let dataSeq = server.queue.dequeue(request.topic, batchNum)
+      echo $dataSeq
+      if dataSeq.isSome and dataSeq.get.len > 0:
         queueResp.code = 0
         queueResp.status = "ok"
         queueResp.message = "successfully dequeue from " & request.topic
-        queueResp.data = dataOpt.get
+        if dataSeq.get.len == 1:
+          queueResp.data = dataSeq.get[0]
+        else:
+          for n in 0..dataSeq.get.len - 1:
+            queueResp.data &= dataSeq.get[n]
+            queueResp.data &= ",\r\n"
         echo $queueResp
       else:
         queueResp.code = 10
@@ -118,7 +144,8 @@ proc processRequest(server: QueueServer, connection: AsyncSocket, request: Queue
         queueResp.data = ""
     of QueueCommand.PUT:
       if request.data.isSome:
-        var numberOfMsg: Option[int] = server.queue.enqueue(request.topic, request.data.get)
+        var numberOfMsg: Option[int] = server.queue.enqueue(request.topic,
+            request.data.get)
         queueResp.code = 0
         queueResp.status = "ok"
         queueResp.message = "successfully enqueue to " & request.topic
@@ -126,25 +153,36 @@ proc processRequest(server: QueueServer, connection: AsyncSocket, request: Queue
         echo "sucess..."
       else:
         raise newException(ProcessError, "No data to enqueue")
+    of QueueCommand.PUB:
+      echo "[server] publish"
+      # discard server.queue.enqueue(request.topic, request.data.get)
+    of QueueCommand.SUB:
+      server.queue.subscribe(request.topic, connection)
+      queueResp.status = "disconnected"
+      queueResp.code = 11
+      queueResp.message = "disconnected from pubsub connection"
     of QueueCommand.CLEAR:
-      # echo "not implemented"
       let cleared = server.queue.clearqueue(request.topic)
       queueResp.code = if cleared.isSome: 0 else: 4
       queueResp.status = if cleared.isSome: $cleared.get else: $false
-      if cleared.isSome: 
-        if cleared.get == true: 
-          queueResp.message = "store resetted" 
-        else: 
-          queueResp.message = "failed to reset store" 
-      else: 
+      if cleared.isSome:
+        if cleared.get == true:
+          queueResp.message = "store resetted"
+        else:
+          queueResp.message = "failed to reset store"
+      else:
         queueResp.message = "failed to reset store, queue topic might not exist"
+    of QueueCommand.COUNT:
+      let count = server.queue.countqueue(request.topic)
+      queueResp.code = 0
+      queueResp.status = "ok"
+      queueResp.message = "queue topic remains with " & $count  & " message"
+      queueResp.data = $count
     of QueueCommand.NEW:
       echo "not implemented"
       queueResp.code = 0
       queueResp.status = "error"
       queueResp.message = "not implemented"
-    # else:
-    #   raise newException(ProcessError, "Failed to process request")
   except ProcessError:
     let e = getCurrentException()
     echo e.msg
@@ -155,30 +193,29 @@ proc processRequest(server: QueueServer, connection: AsyncSocket, request: Queue
     echo $request
 
 
-proc execute(server: QueueServer, client: AsyncSocket) {.thread async.} =
-    var recvLine = await client.recvLine()
-    if recvLine.len > 0:
-      var request = server.parseRequest(recvLine)
-      await server.processRequest(client, request)
-    #else:
-      #echo "Invalid request: ", recvLine
+proc execute(server: QueueServer, client: Socket): void =
+  var recvLine = client.recvLine()
+  if recvLine.len > 0:
+    var request = server.parseRequest(recvLine)
+    echo $request
+    server.processRequest(client, request)
+ 
 
-
-proc start* (server: QueueServer) {.async.} =
+proc start*(server: QueueServer): void =
   if server.running == false:
     server.queue.startListener()
-  var socket = newAsyncSocket(buffered=false)
-  socket.setSockOpt(OptReuseAddr, true)
+  var socket = newSocket()
   socket.bindAddr(Port(server.port))
   socket.listen()
 
   var address = server.address
   while true:
-    var client: AsyncSocket = await socket.accept()
-    #await socket.acceptAddr(client, address)
+    var client: Socket
+    socket.accept(client)
+    #socket.acceptAddr(client, address)
     #echo "Cliented connected from: ", address
-    await server.execute(client)
-  
+    spawn server.execute(client)
+    echo "processed one request"
   #sync()
   socket.close()
 
