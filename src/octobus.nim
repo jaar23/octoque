@@ -1,6 +1,4 @@
-import
-  server/qserver, store/qtopic
-import asyncdispatch
+import server/qserver, store/qtopic
 
 # proc closureProc (x: int, y: int): int =
 #   return x + y
@@ -8,7 +6,7 @@ import asyncdispatch
 
 ## TODO: init from config file
 proc main() =
-  var topics = @["default", "alter"]
+  #var topics = @["default", "alter"]
   #var pbtopics = @[""]
   #let server = initQueueServer("127.0.0.1", 6789, topics, 2)
   let server = newQueueServer("127.0.0.1", 6789)

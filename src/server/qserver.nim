@@ -1,6 +1,5 @@
 import ../store/queue, ../store/qtopic
 import std/[net, options, strutils, strformat]
-import std/asyncdispatch, std/asyncnet
 import threadpool
 
 type
@@ -56,7 +55,8 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
   qserver.queue.addTopic(topicName, connType, capacity)
 
 
-proc newQueueResponse* (status: string, code: int, message: string, data: string): QueueResponse =
+proc newQueueResponse*(status: string, code: int, message: string,
+    data: string): QueueResponse =
   var queueResp = QueueResponse()
   queueResp.code = 0
   queueResp.status = "ok"
@@ -113,7 +113,7 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
 
 
 proc processRequest(server: QueueServer, connection: Socket,
-    request: QueueRequest): void  =
+    request: QueueRequest): void =
   var queueResp = QueueResponse()
   defer:
     if queueResp.status != "disconnected":
@@ -155,7 +155,6 @@ proc processRequest(server: QueueServer, connection: Socket,
         raise newException(ProcessError, "No data to enqueue")
     of QueueCommand.PUB:
       echo "[server] publish"
-      # discard server.queue.enqueue(request.topic, request.data.get)
     of QueueCommand.SUB:
       server.queue.subscribe(request.topic, connection)
       queueResp.status = "disconnected"
@@ -176,7 +175,7 @@ proc processRequest(server: QueueServer, connection: Socket,
       let count = server.queue.countqueue(request.topic)
       queueResp.code = 0
       queueResp.status = "ok"
-      queueResp.message = "queue topic remains with " & $count  & " message"
+      queueResp.message = "queue topic remains with " & $count & " message"
       queueResp.data = $count
     of QueueCommand.NEW:
       echo "not implemented"
@@ -199,7 +198,7 @@ proc execute(server: QueueServer, client: Socket): void =
     var request = server.parseRequest(recvLine)
     echo $request
     server.processRequest(client, request)
- 
+
 
 proc start*(server: QueueServer): void =
   if server.running == false:
@@ -208,7 +207,7 @@ proc start*(server: QueueServer): void =
   socket.bindAddr(Port(server.port))
   socket.listen()
 
-  var address = server.address
+  #var address = server.address
   while true:
     var client: Socket
     socket.accept(client)
@@ -216,7 +215,6 @@ proc start*(server: QueueServer): void =
     #echo "Cliented connected from: ", address
     spawn server.execute(client)
     echo "processed one request"
-  #sync()
   socket.close()
 
 

@@ -1,9 +1,6 @@
-import std/options, std/net, std/locks, strformat, threadpool, os
+import std/[options, net, locks, strformat, enumerate]
 import subscriber
-import sequtils
-import std/enumerate
-import sugar
-#import topic
+
 
 var
   lock: Lock
@@ -64,7 +61,6 @@ proc clear*(qtopic: ref QTopic): bool =
 proc listen*(qtopic: ref QTopic): void {.thread.} =
   echo $getThreadId() & ": " & qtopic.name & " is listening"
   while true:
-  # while qtopic.qchannel.peek() > 0:
     let recvData = qtopic.qchannel.recv()
     #echo "recv Data: " & recvData
     qtopic.storeData(recvData)
@@ -98,8 +94,7 @@ proc publish*(qtopic: ref QTopic, data: string): (seq[ref Subscriber], bool) =
       if pong:
         if data.len > 0:
           echo "send data..."
-          let sent = s.trySend(&"{data}\r\n")
-          echo sent
+          discard s.trySend(&"{data}\r\n")
         else:
           echo "no data"
       else:
@@ -121,15 +116,16 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 
 
 proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
-#proc subscribe*(qtopic: ref QTopic, subscriber: Socket): void =
- #echo "new subscriber: " & $subscriber
   qtopic.subscriptions.add(subscriber)
   try:
     while true:
+      let pong = subscriber.ping()
+      if not pong:
+        break
       var numOfData = 0
       withLock lock:
         numOfData = qtopic.store.peek()
-      echo "num of data\t" & $numOfData
+      # echo "num of data\t" & $numOfData
       var recvData = "\n"
       if numOfData > 0:
         #echo "send num of data"
@@ -141,46 +137,12 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       if droppedConn.len > 0:
         for s in droppedConn:
           qtopic.unsubscribe(s)
-
-      sleep(1000)
-    #subscriber.close()
   except:
     echo getCurrentExceptionMsg()
   finally:
     subscriber.close()
     qtopic.unsubscribe(subscriber)
     echo "exiting pubsub loop..."
-
-
-#  spawn qtopic.pingClient(subscriber)
-  #for s in qtopic.subscriptions:
-  #  echo $s
-  #  discard s.send("0")
-
-
-# proc publish*(qtopic: ref QTopic, data: string) =
-#   echo "new message to publish"
-#   for s in qtopic.subscriptions:
-#     if data.len > 0: 
-#       var respStr = &"status ok\r\ncode 0\r\nmessage publish to subscriber\r\n{data}"
-#       echo respStr
-#       #discard s.send(respStr)
-#       #discard s.send(respStr)
-#       #discard s.send(respStr)
-#
-#       #qtopic.qchannel.send(respStr)
-#     #await s.send(data)
-
-
-# proc pblisten*(qtopic: ref QTopic): Future[void] {.thread.} =
-#   echo $getThreadId() & ": " & qtopic.name & " is listening for pubsub connection"
-#   while true:
-#     let recvData = qtopic.qchannel.recv()
-#     echo "[qtopic] --->" & recvData
-#     if recvData.len > 0:
-#       echo "receiving some data from publisher..."
-#       #qtopic.publish(recvData)
-#       echo "published"
 
 
 proc initQTopic*(name: string, capacity: int,
@@ -201,8 +163,3 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
   return qtopic
 
 
-# proc testClosure* (total: int, handler: (x: int, y: int) -> int): void =
-#   var ix = 3
-#   var iy = 2
-#   var itotal = handler(ix, iy)
-#   echo total, "==", itotal

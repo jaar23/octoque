@@ -26,11 +26,11 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
   let sent = subscriber.connection.trySend(data)
   if not sent:
     subscriber.disconnected = true
-  
+
   return sent
 
 
-proc close*(subscriber: ref Subscriber): void = 
+proc close*(subscriber: ref Subscriber): void =
   echo "connection close..."
   subscriber.connection.close()
 
@@ -48,11 +48,11 @@ proc ping*(subscriber: ref Subscriber): bool =
     return false
 
 
-proc isDisconnected* (subscriber: ref Subscriber): bool = subscriber.disconnected
+proc isDisconnected*(subscriber: ref Subscriber): bool = subscriber.disconnected
 # proc timeout*(subscriber: Subscriber): bool =
 #   subscriber.connection.
 # proc closed(socket: Socket): bool =
 #   return socket.closed
 
-# proc isClose*(subscriber: Subscriber): void = 
+# proc isClose*(subscriber: Subscriber): void =
 #   subscriber.connection.closed

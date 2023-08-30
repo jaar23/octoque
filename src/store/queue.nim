@@ -7,7 +7,6 @@ type QueueState = enum
 type
   Queue* = object
     topics*: seq[ref QTopic]
-    #pbtopics*: seq[ref PubSubTopic]
     state: QueueState
 
 
@@ -47,12 +46,9 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
   result = none(ref QTopic)
   if topicName == "":
     return result
-  #echo "looking for: |", topicName ,"|"
-  for q in 0 .. self.topics.len - 1:
-    #echo "topic seq", q
-    #echo $self.topics[q].name
-    if self.topics[q].name == topicName:
-      result = some(self.topics[q])
+  for q in self.topics:
+    if q.name == topicName:
+      result = some(q)
       break
 
 
@@ -67,7 +63,8 @@ proc enqueue*(self: ref Queue, topicName: string, data: string): Option[int] =
   return some(numOfMessage)
 
 
-proc dequeue*(self: ref Queue, topicName: string, batchNum: int = 1): Option[seq[string]] =
+proc dequeue*(self: ref Queue, topicName: string, batchNum: int = 1): Option[
+    seq[string]] =
   var topic: Option[ref QTopic] = self.find(topicName)
   var outData = newSeq[string]()
   if topic.isSome:
@@ -107,29 +104,32 @@ proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
         spawn queue.topics[t].listen()
 
 
-proc publish*(queue: ref Queue, topicName: string, data: string): Option[bool] =
-  var topic: Option[ref QTopic] = queue.find(topicName)
-  if topic.isSome:
-    #topic.get.publish(data)
-    return some(true)
-  else:
-    return none(bool)
+# proc publish*(queue: ref Queue, topicName: string, data: string): Option[bool] =
+#   var topic: Option[ref QTopic] = queue.find(topicName)
+#   if topic.isSome:
+#     #topic.get.publish(data)
+#     return some(true)
+#   else:
+#     return none(bool)
 
 
-proc subscribe*(queue: ref Queue, topicName: string, connection: Socket): void {.thread.} =
-  echo "pubsub running on " & $getThreadId()
-  var topic: Option[ref QTopic] = queue.find(topicName)
-  if topic.isSome:
-    if topic.get.connectionType != PUBSUB:
-      echo "topic is not subscribable"
+proc subscribe*(queue: ref Queue, topicName: string,
+    connection: Socket): void {.thread.} =
+  try:
+    echo "pubsub running on " & $getThreadId()
+    var topic: Option[ref QTopic] = queue.find(topicName)
+    if topic.isSome:
+      if topic.get.connectionType != PUBSUB:
+        echo "topic is not subscribable"
+      else:
+        echo "new subcscriber"
+        var subscriber = newSubscriber(connection)
+        topic.get.subscribe(subscriber)
+        echo $getThreadId() & " exit..."
     else:
-      echo "new subcscribe"
-      var subscriber = newSubscriber(connection)
-      topic.get.subscribe(subscriber)
-      echo $getThreadId() & " exit..."
-  else:
-    echo "topic not found"
-
+      echo "topic not found"
+  except:
+    echo getCurrentExceptionMsg()
 
 # proc subscribe2* (queue: ref Queue, topicName: string, client: AsyncSocket) {.thread, async.} =
 #   var topic: Option[ref QTopic] = queue.find(topicName)
