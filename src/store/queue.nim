@@ -32,6 +32,7 @@ proc initQueue*(topics: varargs[ref QTopic]): ref Queue =
 
 proc addTopic*(queue: ref Queue, topic: ref QTopic): void = queue.topics.add(topic)
 
+
 proc addTopic*(queue: ref Queue, topicName: string,
     connType: ConnectionType = BROKER, capacity: int = 0): void =
   if capacity > 0:
@@ -116,6 +117,7 @@ proc publish*(queue: ref Queue, topicName: string, data: string): Option[bool] =
 
 
 proc subscribe*(queue: ref Queue, topicName: string, connection: Socket): void {.thread.} =
+  echo "pubsub running on " & $getThreadId()
   var topic: Option[ref QTopic] = queue.find(topicName)
   if topic.isSome:
     if topic.get.connectionType != PUBSUB:
@@ -124,6 +126,7 @@ proc subscribe*(queue: ref Queue, topicName: string, connection: Socket): void {
       echo "new subcscribe"
       var subscriber = newSubscriber(connection)
       topic.get.subscribe(subscriber)
+      echo $getThreadId() & " exit..."
   else:
     echo "topic not found"
 

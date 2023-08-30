@@ -16,7 +16,7 @@ type
     name: string
     qchannel: Channel[string]
     store {.guard: lock.}: Channel[string]
-    subscriptions: seq[Subscriber]
+    subscriptions: seq[ref Subscriber]
     topicConnectionType: ConnectionType
     capacity: int
 
@@ -84,9 +84,16 @@ proc size*(self: ref QTopic): int =
     return self.store.peek()
 
 
-proc publish*(qtopic: ref QTopic, data: string): seq[Subscriber] =
+proc publish*(qtopic: ref QTopic, data: string): (seq[ref Subscriber], bool) =
+  var idle = false
+  var lostClient = newSeq[ref Subscriber]()
   try:
     for s in qtopic.subscriptions:
+      if s.isDisconnected():
+        idle = true
+        break
+      else:
+        idle = false
       let pong = s.ping()
       if pong:
         if data.len > 0:
@@ -97,13 +104,15 @@ proc publish*(qtopic: ref QTopic, data: string): seq[Subscriber] =
           echo "no data"
       else:
         echo "disconnected....."
-        result.add(s)
+        lostClient.add(s)
   except:
     echo "failed to send data"
     echo getCurrentExceptionMsg()
+  finally:
+    return (lostClient, idle)
 
 
-proc unsubscribe*(qtopic: ref QTopic, subscriber: Subscriber): void =
+proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
   echo "unsubscribe " & $subscriber.connectionId
   for (i, s) in enumerate(qtopic.subscriptions):
     if s.connectionId == subscriber.connectionId:
@@ -111,7 +120,7 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: Subscriber): void =
       break
 
 
-proc subscribe*(qtopic: ref QTopic, subscriber: Subscriber): void =
+proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 #proc subscribe*(qtopic: ref QTopic, subscriber: Socket): void =
  #echo "new subscriber: " & $subscriber
   qtopic.subscriptions.add(subscriber)
@@ -123,25 +132,24 @@ proc subscribe*(qtopic: ref QTopic, subscriber: Subscriber): void =
       echo "num of data\t" & $numOfData
       var recvData = "\n"
       if numOfData > 0:
-        echo "send num of data"
-        #subscriber.send("1\n")
+        #echo "send num of data"
         withLock lock:
           recvData = qtopic.store.recv()
-           #await subscriber.send(recvData)
-          #subscriber.send(recvData & "\n")
-      let droppedConn = qtopic.publish(recvData)
-      echo droppedConn
+      let (droppedConn, idle) = qtopic.publish(recvData)
+      if idle:
+        break
       if droppedConn.len > 0:
         for s in droppedConn:
           qtopic.unsubscribe(s)
 
-      sleep(2000)
+      sleep(1000)
     #subscriber.close()
   except:
     echo getCurrentExceptionMsg()
   finally:
     subscriber.close()
-    qtopic.unsubscribe(subscriber)    
+    qtopic.unsubscribe(subscriber)
+    echo "exiting pubsub loop..."
 
 
 #  spawn qtopic.pingClient(subscriber)
