@@ -196,7 +196,7 @@ proc execute(server: QueueServer, client: Socket): void =
   var recvLine = client.recvLine()
   if recvLine.len > 0:
     var request = server.parseRequest(recvLine)
-    echo $request
+    #echo $request
     server.processRequest(client, request)
 
 

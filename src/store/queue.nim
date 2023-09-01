@@ -1,5 +1,6 @@
 import qtopic, std/options, threadpool, subscriber, net
 
+
 type QueueState = enum
   RUNNING, PAUSED, STOPPED, STARTED
 
@@ -115,21 +116,26 @@ proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
 
 proc subscribe*(queue: ref Queue, topicName: string,
     connection: Socket): void {.thread.} =
+  echo "pubsub running on " & $getThreadId()
+  var topic: Option[ref QTopic] = queue.find(topicName)
+  var subscriber = newSubscriber(connection, $getThreadId())
   try:
-    echo "pubsub running on " & $getThreadId()
-    var topic: Option[ref QTopic] = queue.find(topicName)
     if topic.isSome:
       if topic.get.connectionType != PUBSUB:
         echo "topic is not subscribable"
       else:
-        echo "new subcscriber"
-        var subscriber = newSubscriber(connection)
+        echo "-----------------------------------------\n\n"
+        echo $subscriber & "\n"
         topic.get.subscribe(subscriber)
         echo $getThreadId() & " exit..."
     else:
       echo "topic not found"
   except:
     echo getCurrentExceptionMsg()
+  finally:
+    if topic.isSome:
+      echo $getThreadId() & " exit thread"
+      topic.get.unsubscribe(subscriber)
 
 # proc subscribe2* (queue: ref Queue, topicName: string, client: AsyncSocket) {.thread, async.} =
 #   var topic: Option[ref QTopic] = queue.find(topicName)
