@@ -1,6 +1,7 @@
 import ../store/queue, ../store/qtopic
-import std/[net, options, strutils, strformat]
-import threadpool
+import net, options, strutils, strformat, threadpool, logging, times
+from ../log/logger import notice,error,debug,info, registerLogHandler
+
 
 type
   QueueCommand* = enum
@@ -9,7 +10,6 @@ type
     CLEAR = "CLEAR",
     NEW = "NEW",
     SUB = "SUB",
-    PUB = "PUB",
     COUNT = "COUNT"
 
   QueueServer* = object
@@ -75,11 +75,10 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
   try:
     var dataArr = reqData.split(" ")
     var data = ""
-    #echo $dataArr
     if dataArr.len >= 3:
       data = dataArr[2..dataArr.len - 1].join(" ")
     elif dataArr.len <= 1:
-      raise newException(ParseError, "Invalid request part")
+      raise newException(ParseError, "invalid request part")
 
     queueReq.topic = dataArr[1]
     case dataArr[0]
@@ -93,21 +92,15 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
       queueReq.command = CLEAR
     of $QueueCommand.NEW:
       queueReq.command = NEW
-    of $QueueCommand.PUB:
-      echo "new publish.."
-      queueReq.command = PUB
-      queueReq.data = some(data)
     of $QueueCommand.SUB:
       queueReq.command = SUB
     of $QueueCommand.COUNT:
       queueReq.command = COUNT
     else:
-      echo "OH NOOO"
-      raise newException(ParseError, "Invalid queue command")
+      log(lvlInfo, "invalid queue command: " & dataArr[0])
+      raise newException(ParseError, "invalid queue command")
   except ParseError:
-    let e = getCurrentException()
-    echo "Failed to parse command: " & e.msg
-    echo "request data:", $reqData
+    error(getCurrentExceptionMsg())
 
   return queueReq
 
@@ -119,6 +112,7 @@ proc processRequest(server: QueueServer, connection: Socket,
     if queueResp.status != "disconnected":
       connection.send(queueResp.toStrResponse())
     connection.close()
+    info "done processed"
 
   try:
     case request.command
@@ -150,13 +144,11 @@ proc processRequest(server: QueueServer, connection: Socket,
         queueResp.status = "ok"
         queueResp.message = "successfully enqueue to " & request.topic
         queueResp.data = $numberOfMsg
-        echo "sucess..."
       else:
-        raise newException(ProcessError, "No data to enqueue")
-    of QueueCommand.PUB:
-      echo "[server] publish"
+        raise newException(ProcessError, "no data to enqueue")
     of QueueCommand.SUB:
       server.queue.subscribe(request.topic, connection)
+      info "pubsub connection exiting"
       queueResp.status = "disconnected"
       queueResp.code = 11
       queueResp.message = "disconnected from pubsub connection"
@@ -178,25 +170,37 @@ proc processRequest(server: QueueServer, connection: Socket,
       queueResp.message = "queue topic remains with " & $count & " message"
       queueResp.data = $count
     of QueueCommand.NEW:
-      echo "not implemented"
+      warn("not implemented")
       queueResp.code = 0
       queueResp.status = "error"
       queueResp.message = "not implemented"
   except ProcessError:
     let e = getCurrentException()
-    echo e.msg
+    error(e.msg)
     queueResp.code = 99
     queueResp.status = "error"
     queueResp.message = "Failed to process request: " & e.msg
     queueResp.data = ""
-    echo $request
+    error("failed to process request: " & $request)
 
 
-proc execute(server: QueueServer, client: Socket): void =
+proc execute(server: QueueServer, client: Socket): void {.thread.} =
+  # var clogger = newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
+  # addHandler(clogger)
+  defer:
+    var handlers = getHandlers()
+    for index in 0..handlers.len - 1:
+      handlers.delete(index)
+
+  # var clogger = newConsoleLogger(fmtStr="[$datetime][$levelname] - $appname: ")
+  # var flogger = newFileLogger(now().format("yyyyMMddHHmm") & ".log", levelThreshold=lvlAll)
+  # addHandler(clogger)
+  # addHandler(flogger)
+  registerLogHandler()
   var recvLine = client.recvLine()
   if recvLine.len > 0:
     var request = server.parseRequest(recvLine)
-    #echo $request
+    debug($request)
     server.processRequest(client, request)
 
 
@@ -207,14 +211,12 @@ proc start*(server: QueueServer): void =
   socket.bindAddr(Port(server.port))
   socket.listen()
 
-  #var address = server.address
   while true:
     var client: Socket
     socket.accept(client)
-    #socket.acceptAddr(client, address)
-    #echo "Cliented connected from: ", address
+    info("processing client request from " & $client.getPeerAddr())
     spawn server.execute(client)
-    echo "processed one request"
   socket.close()
+  notice("terminating server")
 
 

@@ -1,6 +1,9 @@
-import std/[options, net, locks, strformat, enumerate, sequtils, sugar, os]
+import options, net, locks, strformat, sequtils, sugar
+import std/enumerate
 import subscriber
 import uuid4
+import threadpool
+from ../log/logger import info, error, debug
 
 
 var
@@ -14,6 +17,7 @@ type
   QTopic* = object
     name: string
     qchannel: Channel[string]
+    pchannel: Channel[string]
     store {.guard: storeLock.}: Channel[string]
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
@@ -25,14 +29,13 @@ proc name*(qtopic: ref QTopic): string = qtopic.name
 proc connectionType*(qtopic: ref QTopic): ConnectionType = qtopic.topicConnectionType
 
 proc storeData (qtopic: ref QTopic, data: string): void =
+  debug &"{getThreadId()}.{qtopic.name} store new message, {data}"
   withLock storeLock:
     let sent = qtopic.store.trySend(data)
-    if sent:
-      echo "message sent: ", sent
-    else:
-      echo "send failed, retrying..."
+    if not sent:
+      error &"{getThreadId()}.{qtopic.name} send failed, retrying"
+      error &"{getThreadId()}.{qtopic.name} current store size: {qtopic.store.peek()}"
       qtopic.qchannel.send(data)
-    echo "current store size: " & $qtopic.store.peek()
 
 
 proc recv*(qtopic: ref QTopic): Option[string] =
@@ -42,18 +45,15 @@ proc recv*(qtopic: ref QTopic): Option[string] =
       return some(recvData)
     else:
       return none(string)
-  # let recv = self.channel.tryRecv()
-  # if recv.dataAvailable:
-  #   return some(recv.msg)
-  # else:
-  #   return none(string)
 
 
 proc send*(qtopic: ref QTopic, data: string): void =
+  debug &"{getThreadId()}.{qtopic.name} send to qchannel"
   qtopic.qchannel.send(data)
 
 
 proc clear*(qtopic: ref QTopic): bool =
+  info &"{getThreadId()}.{qtopic.name} clear message"
   withLock storeLock:
     qtopic.store.close()
     qtopic.store.open()
@@ -61,20 +61,10 @@ proc clear*(qtopic: ref QTopic): bool =
 
 
 proc listen*(qtopic: ref QTopic): void {.thread.} =
-  echo $getThreadId() & ": " & qtopic.name & " is listening"
+  info &"{getThreadId()}.{qtopic.name} listening"
   while true:
     let recvData = qtopic.qchannel.recv()
-    #echo "recv Data: " & recvData
     qtopic.storeData(recvData)
-    echo $getThreadId() & " processed message"
-
-# proc listen* (qtopic: ref QTopic, handler: (socket: Socket, data: string) -> bool): void =
-#   echo qtopic.name & " is listening..."
-  # while self.channel.peek() > 0:
-  #   let recv = self.channel.tryRecv()
-  #   if recv.dataAvailable:
-  #     echo recv.msg
-  # echo self.name, " channel is close"
 
 
 proc size*(self: ref QTopic): int =
@@ -83,73 +73,40 @@ proc size*(self: ref QTopic): int =
 
 
 proc publish*(qtopic: ref QTopic, data: string): void =
-  #var idle = false
-  #var lostClient = newSeq[ref Subscriber]()
+  info &"{getThreadId()}.{qtopic.name} publish to subscriber"
   withLock subscLock:
     try:
-      # let droppedConn = qtopic.subscriptions.filter(s => s.isDisconnected())
-      # echo &"droppedConn :{droppedConn.len} == {qtopic.subscriptions.len}" 
-      # if droppedConn.len == qtopic.subscriptions.len:
-      #   idle = true
-
       for s in qtopic.subscriptions.filter(s => not s.isDisconnected()):
-        # if s.isDisconnected():
-        #   idle = true
-        #   echo $s
-        #   continue
-        # else:
-        #   echo $s
-        #   idle = false
         let pong = s.ping()
         if pong:
           discard s.trySend(&"{data}\r\n")
         else:
-          echo &"[{s.threadId}] {$s.connectionId} disconnected....."
           s.close()
-          #lostClient.add(s)
-        #echo &"is idle: {idle}"
     except:
-      echo "failed to send data"
-      echo getCurrentExceptionMsg()
-    # finally:
-    #   return (lostClient, idle)
+      error &"{getThreadId()}.{qtopic.name} failed to send data"
+      error getCurrentExceptionMsg()
 
 
 proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
   withLock subscLock:
     var idle = false
     let droppedConn = qtopic.subscriptions.filter(s => s.isDisconnected())
-    #echo &"droppedConn :{droppedConn.len} == {qtopic.subscriptions.len}" 
     if droppedConn.len == qtopic.subscriptions.len:
       idle = true
       for (i, s) in enumerate(qtopic.subscriptions):
         if s.isDisconnected():
-          echo &"[{subscriber.threadId}] unsubscribe & remove {$subscriber.connectionId}"
+          info &"{subscriber.runnerId()} unsubscribe & remove from subscriptions"
           qtopic.subscriptions.delete(i)
     else: 
       for (i, s) in enumerate(qtopic.subscriptions.filter(s => s.isDisconnected())):
         if s.connectionId == subscriber.connectionId:
-          echo &"[{subscriber.threadId}] unsubscribe {$subscriber.connectionId}"
+          info &"{subscriber.runnerId()} unsubscribe from subscriptions"
           s.close()
-          #qtopic.subscriptions.delete(i)
           break
-    echo &"[{subscriber.threadId}] exit unsubscribe, remaining: {qtopic.subscriptions.len}"
-        #else:
-        #echo $s
-
-# proc findSubscriber(qtopic: ref QTopic, connId: uuid4): ref Subscriber =
-#   withLock subscLock:
-#     for s in qtopic.subscriptions:
-#       if s.connectionId == connId:
-#         result = s
-#         break
+    info &"{subscriber.runnerId()} exit unsubscribe, remaining: {qtopic.subscriptions.len}"
 
 
 proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
-  # echo "before"
-  # for s in qtopic.subscriptions:
-  #   echo "is closed: " & $s.isDisconnected
-  #   echo $s.connectionId
   var qsubs: ref Subscriber
   withLock subscLock:
     qtopic.subscriptions.add(subscriber)
@@ -157,48 +114,36 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       if s.connectionId == subscriber.connectionId:
         qsubs = s
         break
-
+    info &"{getThreadId()}.{qtopic.name} subscriptions size: {qtopic.subscriptions.len}"
   try:
+    spawn qsubs.run()
     while true:
-      # var numOfSubs = 0
-      # withLock subscLock:
-      #   numOfSubs = qtopic.subscriptions.len
-      # if numOfSubs == 0:
-      #   break
-      # ping the client before send any message
       let pong = qsubs.ping()
       if not pong:
         break
       var numOfData = 0
-      var recvData = "\n"
+      var recvData = ""
       withLock storeLock:
         numOfData = qtopic.store.peek()
         if numOfData > 0:
-           recvData = qtopic.store.recv()
-      qtopic.publish(recvData)
-      # stop if no more subscription
-      #echo &"[{qsubs.threadId}] is idle: {idle}"
-      # if idle:
-      #   break
-      # remove subscriptions if it dropped
-      # if droppedConn.len > 0:
-      #   for s in droppedConn:
-      #     echo "--> from subcribe\n"
-      #     s.close()
-      #     qtopic.unsubscribe(s)
-      #withLock subscLock:
-      #numOfConn = qtopic.subscriptions.len
+          recvData = qtopic.store.recv()
+      
+      withLock subscLock:
+        if recvData != "":
+          # &"\n\n{getThreadId()} before push: {qtopic.subscriptions.len}"
+          for sbr in qtopic.subscriptions:
+            sbr.push(recvData)
   except:
-    echo getCurrentExceptionMsg()
+    error &"{getThreadId()}.{qtopic.name} {getCurrentExceptionMsg()}"
   finally:
-    #qsubs.close()
-    #qtopic.unsubscribe(subscriber)
-    echo &"[{subscriber.threadId}] {$subscriber.connectionId} is exiting pubsub loop...\n"
+    info &"{getThreadId()}.{qtopic.name} {subscriber.runnerId()} is exiting pubsub loop"
 
 
 proc initQTopic*(name: string, capacity: int,
     connType: ConnectionType = BROKER): ref QTopic =
   var qtopic: ref QTopic = (ref QTopic)(name: name)
+  qtopic.qchannel.open()
+  qtopic.pchannel.open()
   withLock storeLock:
     qtopic.topicConnectionType = connType
     qtopic.store.open(capacity)
@@ -210,11 +155,11 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.topicConnectionType = connType
   qtopic.qchannel.open()
+  qtopic.pchannel.open()
   withLock storeLock:
     qtopic.store.open()
   withLock subscLock:
     qtopic.subscriptions = newSeq[ref Subscriber]()
-
   return qtopic
 
 

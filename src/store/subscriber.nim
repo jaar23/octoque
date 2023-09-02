@@ -1,6 +1,7 @@
 import uuid4
 import net
-import strformat
+import strformat, locks
+from ../log/logger import info, debug, error, loggerLock
 
 type
   Subscriber* = object
@@ -8,6 +9,7 @@ type
     connection: Socket
     connectionId*: Uuid
     disconnected*: bool = false
+    channel: Channel[string]
 
 
 proc newSubscriber*(conn: Socket, threadId: string): ref Subscriber =
@@ -15,14 +17,19 @@ proc newSubscriber*(conn: Socket, threadId: string): ref Subscriber =
   result.connectionId = uuid4()
   result.connection = conn
   result.threadId = threadId
+  result.channel.open()
+
+
+proc runnerId*(subscriber: ref Subscriber): string =
+  &"{subscriber.threadId}.{subscriber.connectionId}"
+
+proc push*(subscriber: ref Subscriber, data: string): void =
+  debug &"{subscriber.runnerId()} push new message, {data}"
+  subscriber.channel.send(data)
 
 
 proc notify*(subscriber: ref Subscriber): void =
   subscriber.connection.send("1\n")
-
-
-proc send*(subscriber: ref Subscriber, data: string): void =
-  subscriber.connection.send(data)
 
 
 proc trySend*(subscriber: ref Subscriber, data: string): bool =
@@ -35,8 +42,15 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
     return sent
 
 
+proc publish*(subscriber: ref Subscriber): void =
+  let recvData = subscriber.channel.recv()
+  let sent: bool = subscriber.trySend(recvData)
+  if not sent:
+    debug &"{subscriber.runnerId()} failed to send message"
+
+
 proc close*(subscriber: ref Subscriber): void =
-  echo &"[{subscriber.threadId}] {$subscriber.connectionId} connection close..."
+  info &"{subscriber.runnerId()} connection close..."
 
   if subscriber.disconnected:
     return
@@ -45,6 +59,13 @@ proc close*(subscriber: ref Subscriber): void =
 
 
 proc ping*(subscriber: ref Subscriber): bool =
+  # debug &"{subscriber.runnerId()} ping subscriber"
+  # defer:
+  #   if result:
+  #     debug &"{subscriber.runnerId()} ping successfully"
+  #   else:
+  #     debug &"{subscriber.runnerId()} ping failed"
+
   let sent = subscriber.connection.trySend("\n")
   if not sent:
     subscriber.disconnected = true
@@ -57,21 +78,36 @@ proc ping*(subscriber: ref Subscriber): bool =
     subscriber.disconnected = true
     return false
 
-
-proc isDisconnected*(subscriber: ref Subscriber): bool = subscriber.disconnected
+ 
+proc isDisconnected*(subscriber: ref Subscriber): bool = 
+  subscriber.disconnected
 
 
 proc `$`*(subscriber: ref Subscriber): string =
-  result = &"[{subscriber.threadId}] {$subscriber.connectionId} is "
+  result = &"{subscriber.runnerId()} is "
   if subscriber.disconnected: 
     result &= "disconnected"
   else:
     result &= "connected"
 
-# proc timeout*(subscriber: Subscriber): bool =
-#   subscriber.connection.
-# proc closed(socket: Socket): bool =
-#   return socket.closed
 
-# proc isClose*(subscriber: Subscriber): void =
-#   subscriber.connection.closed
+proc run*(subscriber: ref Subscriber) {.thread.} =
+  subscriber.threadId = $getThreadId()
+  info $subscriber
+  defer:
+    subscriber.close()
+    info &"{subscriber.runnerId()} exit run"
+  try: 
+    while not subscriber.disconnected:
+      if not subscriber.isDisconnected():
+        let pong = subscriber.ping()
+        if not pong:
+          break
+        subscriber.publish()
+      else:
+        echo $subscriber
+        break
+  except:
+    error &"{subscriber.runnerId()} {getCurrentExceptionMsg()}"
+    
+
