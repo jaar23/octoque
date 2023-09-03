@@ -11,6 +11,12 @@ todo:
 
 [p] standardize response
 
+[ ] new topic on the fly
+
+[ ] REPL
+
+[ ] init with file config
+
 [ ] error queue
 
 [ ] persistent store
