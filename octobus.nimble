@@ -12,3 +12,4 @@ bin           = @["octobus"]
 
 requires "nim >= 2.0.0"
 requires "uuid4 >= 0.9.3"
+requires "octolog >= 0.1.0"

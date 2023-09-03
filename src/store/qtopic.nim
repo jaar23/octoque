@@ -3,8 +3,7 @@ import std/enumerate
 import subscriber
 import uuid4
 import threadpool
-from ../log/logger import info, error, debug
-
+import octolog
 
 var
   storeLock: Lock

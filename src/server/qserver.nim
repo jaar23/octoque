@@ -1,6 +1,6 @@
 import ../store/queue, ../store/qtopic
-import net, options, strutils, strformat, threadpool, logging, times
-from ../log/logger import notice,error,debug,info, registerLogHandler
+import net, options, strutils, strformat, threadpool 
+import octolog
 
 
 type
@@ -97,10 +97,10 @@ proc parseRequest(server: QueueServer, reqData: string): QueueRequest =
     of $QueueCommand.COUNT:
       queueReq.command = COUNT
     else:
-      log(lvlInfo, "invalid queue command: " & dataArr[0])
+      info &"invalid queue command: {dataArr[0]}"
       raise newException(ParseError, "invalid queue command")
   except ParseError:
-    error(getCurrentExceptionMsg())
+    error getCurrentExceptionMsg()
 
   return queueReq
 
@@ -185,18 +185,6 @@ proc processRequest(server: QueueServer, connection: Socket,
 
 
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
-  # var clogger = newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
-  # addHandler(clogger)
-  defer:
-    var handlers = getHandlers()
-    for index in 0..handlers.len - 1:
-      handlers.delete(index)
-
-  # var clogger = newConsoleLogger(fmtStr="[$datetime][$levelname] - $appname: ")
-  # var flogger = newFileLogger(now().format("yyyyMMddHHmm") & ".log", levelThreshold=lvlAll)
-  # addHandler(clogger)
-  # addHandler(flogger)
-  registerLogHandler()
   var recvLine = client.recvLine()
   if recvLine.len > 0:
     var request = server.parseRequest(recvLine)

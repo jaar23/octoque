@@ -1,7 +1,8 @@
 import uuid4
 import net
-import strformat, locks
-from ../log/logger import info, debug, error, loggerLock
+import strformat
+import octolog
+
 
 type
   Subscriber* = object
@@ -22,6 +23,7 @@ proc newSubscriber*(conn: Socket, threadId: string): ref Subscriber =
 
 proc runnerId*(subscriber: ref Subscriber): string =
   &"{subscriber.threadId}.{subscriber.connectionId}"
+
 
 proc push*(subscriber: ref Subscriber, data: string): void =
   debug &"{subscriber.runnerId()} push new message, {data}"

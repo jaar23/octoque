@@ -1,6 +1,5 @@
 import qtopic, std/options, threadpool, subscriber, net, strformat
-from ../log/logger import info, error, debug
-
+import octolog
 
 type QueueState = enum
   RUNNING, PAUSED, STOPPED, STARTED

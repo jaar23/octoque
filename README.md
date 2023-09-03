@@ -2,9 +2,21 @@
 simple queue server implemented in nim
 
 todo:
-[ ] pubsub channel
-[ ] multiple subcriber (push and broadcast based)
+
+[x] pubsub channel
+
+[x] multiple subcriber (push and broadcast based)
+
+[x] logging for common and pubsub channel
+
+[p] standardize response
+
+[ ] error queue
+
 [ ] persistent store
+
 [ ] schema based queue
-[ ] batch delivery
+
+[p] batch delivery
+
 
