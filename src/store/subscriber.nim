@@ -56,7 +56,7 @@ proc close*(subscriber: ref Subscriber): void =
 
   if subscriber.disconnected:
     return
-  subscriber.disconnected  = true
+  subscriber.disconnected = true
   subscriber.connection.close()
 
 
@@ -80,14 +80,14 @@ proc ping*(subscriber: ref Subscriber): bool =
     subscriber.disconnected = true
     return false
 
- 
-proc isDisconnected*(subscriber: ref Subscriber): bool = 
+
+proc isDisconnected*(subscriber: ref Subscriber): bool =
   subscriber.disconnected
 
 
 proc `$`*(subscriber: ref Subscriber): string =
   result = &"{subscriber.runnerId()} is "
-  if subscriber.disconnected: 
+  if subscriber.disconnected:
     result &= "disconnected"
   else:
     result &= "connected"
@@ -99,7 +99,7 @@ proc run*(subscriber: ref Subscriber) {.thread.} =
   defer:
     subscriber.close()
     info &"{subscriber.runnerId()} exit run"
-  try: 
+  try:
     while not subscriber.disconnected:
       if not subscriber.isDisconnected():
         let pong = subscriber.ping()
@@ -111,5 +111,5 @@ proc run*(subscriber: ref Subscriber) {.thread.} =
         break
   except:
     error &"{subscriber.runnerId()} {getCurrentExceptionMsg()}"
-    
+
 

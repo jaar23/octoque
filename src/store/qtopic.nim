@@ -23,9 +23,13 @@ type
     capacity: int
 
 
-proc name*(qtopic: ref QTopic): string = qtopic.name
+proc name*(qtopic: ref QTopic): string =
+  qtopic.name
 
-proc connectionType*(qtopic: ref QTopic): ConnectionType = qtopic.topicConnectionType
+
+proc connectionType*(qtopic: ref QTopic): ConnectionType =
+  qtopic.topicConnectionType
+
 
 proc storeData (qtopic: ref QTopic, data: string): void =
   debug &"{getThreadId()}.{qtopic.name} store new message, {data}"
@@ -96,7 +100,7 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
         if s.isDisconnected():
           info &"{subscriber.runnerId()} unsubscribe & remove from subscriptions"
           qtopic.subscriptions.delete(i)
-    else: 
+    else:
       for (i, s) in enumerate(qtopic.subscriptions.filter(s => s.isDisconnected())):
         if s.connectionId == subscriber.connectionId:
           info &"{subscriber.runnerId()} unsubscribe from subscriptions"
@@ -126,7 +130,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
         numOfData = qtopic.store.peek()
         if numOfData > 0:
           recvData = qtopic.store.recv()
-      
+
       withLock subscLock:
         if recvData != "":
           # &"\n\n{getThreadId()} before push: {qtopic.subscriptions.len}"
