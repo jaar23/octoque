@@ -1,4 +1,4 @@
-# octobus
+# octoque
 simple queue server implemented in nim
 
 todo:
@@ -10,6 +10,8 @@ todo:
 [x] logging for common and pubsub channel
 
 [p] standardize response
+
+[p] standardize request
 
 [ ] new topic on the fly
 
