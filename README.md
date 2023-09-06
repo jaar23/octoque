@@ -13,6 +13,8 @@ todo:
 
 [p] standardize request
 
+[p] streaming of data
+
 [ ] new topic on the fly
 
 [ ] REPL

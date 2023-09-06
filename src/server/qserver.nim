@@ -36,7 +36,7 @@ type
 proc newQueueServer*(address: string, port: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   qserver.queue = newQueue()
-  qserver.running = false
+  qserver.running = true
   return qserver
 
 
@@ -192,15 +192,18 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
     server.processRequest(client, request)
 
 
-proc start*(server: QueueServer): void =
-  if server.running == false:
-    server.queue.startListener()
-  var socket = newSocket()
+proc start*(server: QueueServer, numOfThread: int): void =
+  if server.running != false:
+    server.queue.startListener(numOfThread)
+  let socket = newSocket()
   socket.bindAddr(Port(server.port))
   socket.listen()
+  info(&"server is listening on 0.0.0.0: {server.port}")
 
   while true:
     var client: Socket
+    #var address = ""
+    #socket.acceptAddr(client, address)
     socket.accept(client)
     info("processing client request from " & $client.getPeerAddr())
     spawn server.execute(client)

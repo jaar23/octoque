@@ -1,18 +1,21 @@
 import server/qserver, store/qtopic
-import octolog
+import octolog, os, strutils
 
 
 ## TODO: init from config file
 proc main() =
-  let server = new_queue_server("127.0.0.1", 6789)
-  server.addQueueTopic("default")
+  let server = new_queue_server("0.0.0.0", 6789)
+  server.addQueueTopic("default", BROKER)
   server.addQueueTopic("pubsub", PUBSUB)
-  server.start()
+  var numOfThread = 2
+  if paramCount() > 0:
+    numOfThread = paramStr(1).parseInt()
+  server.start(numOfThread)
 
 
 when isMainModule:
   octologStart()
-  info "octobus is started at 127.0.0.1:6789"
+  info "octobus is started at 0.0.0.0:6789"
   main()
   info "server terminated"
   octologStop()

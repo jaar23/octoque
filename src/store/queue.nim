@@ -56,7 +56,7 @@ proc dequeue*(self: ref Queue, topicName: string, batchNum: int = 1): Option[
   var topic: Option[ref QTopic] = self.find(topicName)
   var outData = newSeq[string]()
   if topic.isSome:
-    for n in 0..batchNum - 1:
+    for n in 0..<batchNum:
       var data: Option[string] = topic.get.recv()
       if data.isSome:
         outData.add(data.get)
@@ -91,12 +91,13 @@ proc countqueue*(queue: ref Queue, topicName: string): int =
 proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
   info(&"BROKER topic has {numOfThread} worker(s)")
   info(&"PUBSUB topic has 1 worker")
-  for t in 0 .. queue.topics.len - 1:
+  for t in 0 ..< queue.topics.len:
     if queue.topics[t].connectionType == ConnectionType.PUBSUB:
       spawn queue.topics[t].listen()
     else:
-      for n in 0 .. numOfThread - 1:
+      for n in 0 ..< numOfThread:
         spawn queue.topics[t].listen()
+  info(&"Topic is currently listening for requests")
 
 
 proc subscribe*(queue: ref Queue, topicName: string,

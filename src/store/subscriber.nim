@@ -45,10 +45,13 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
 
 
 proc publish*(subscriber: ref Subscriber): void =
-  let recvData = subscriber.channel.recv()
-  let sent: bool = subscriber.trySend(recvData)
-  if not sent:
-    debug &"{subscriber.runnerId()} failed to send message"
+  if subscriber.channel.peek() >  0:
+    let recvData = subscriber.channel.recv()
+    let sent: bool = subscriber.trySend(recvData)
+    if not sent:
+      debug &"{subscriber.runnerId()} failed to send message"
+  else:
+    return
 
 
 proc close*(subscriber: ref Subscriber): void =

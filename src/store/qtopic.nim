@@ -1,4 +1,4 @@
-import options, net, locks, strformat, sequtils, sugar
+import options, net, locks, strformat, sequtils, sugar, os
 import std/enumerate
 import subscriber
 import uuid4
@@ -66,8 +66,11 @@ proc clear*(qtopic: ref QTopic): bool =
 proc listen*(qtopic: ref QTopic): void {.thread.} =
   info &"{getThreadId()}.{qtopic.name} listening"
   while true:
-    let recvData = qtopic.qchannel.recv()
-    qtopic.storeData(recvData)
+    if qtopic.qchannel.peek() > 0:
+      let recvData = qtopic.qchannel.recv()
+      qtopic.storeData(recvData)
+    else:
+      sleep(2000)
 
 
 proc size*(self: ref QTopic): int =
