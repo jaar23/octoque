@@ -1,4 +1,4 @@
-import options, net, locks, strformat, sequtils, sugar, os
+import options, net, locks, strformat, sequtils, sugar
 import std/enumerate
 import subscriber
 import uuid4
@@ -16,7 +16,7 @@ type
   QTopic* = object
     name: string
     qchannel: Channel[string]
-    pchannel: Channel[string]
+    retryStore: Channel[string]
     store {.guard: storeLock.}: Channel[string]
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
@@ -32,13 +32,13 @@ proc connectionType*(qtopic: ref QTopic): ConnectionType =
 
 
 proc storeData (qtopic: ref QTopic, data: string): void =
-  debug &"{getThreadId()}.{qtopic.name} store new message, {data}"
+  #debug $getThreadId() & "." & qtopic.name & "store new message, " & data
   withLock storeLock:
     let sent = qtopic.store.trySend(data)
     if not sent:
       error &"{getThreadId()}.{qtopic.name} send failed, retrying"
       error &"{getThreadId()}.{qtopic.name} current store size: {qtopic.store.peek()}"
-      qtopic.qchannel.send(data)
+      qtopic.retryStore.send(data)
 
 
 proc recv*(qtopic: ref QTopic): Option[string] =
@@ -66,12 +66,10 @@ proc clear*(qtopic: ref QTopic): bool =
 proc listen*(qtopic: ref QTopic): void {.thread.} =
   info &"{getThreadId()}.{qtopic.name} listening"
   while true:
-    if qtopic.qchannel.peek() > 0:
-      let recvData = qtopic.qchannel.recv()
-      qtopic.storeData(recvData)
-    else:
-      sleep(2000)
-
+    let recvData = qtopic.qchannel.recv()
+    debug $getThreadId() & "." & qtopic.name & "store new message, " & recvData
+    spawn qtopic.storeData(recvData)
+   
 
 proc size*(self: ref QTopic): int =
   withLock storeLock:
@@ -149,7 +147,7 @@ proc initQTopic*(name: string, capacity: int,
     connType: ConnectionType = BROKER): ref QTopic =
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.qchannel.open()
-  qtopic.pchannel.open()
+  qtopic.retryStore.open()
   withLock storeLock:
     qtopic.topicConnectionType = connType
     qtopic.store.open(capacity)
@@ -161,7 +159,7 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.topicConnectionType = connType
   qtopic.qchannel.open()
-  qtopic.pchannel.open()
+  qtopic.retryStore.open()
   withLock storeLock:
     qtopic.store.open()
   withLock subscLock:
