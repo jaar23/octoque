@@ -68,7 +68,7 @@ proc listen*(qtopic: ref QTopic): void {.thread.} =
   while true:
     let recvData = qtopic.qchannel.recv()
     debug $getThreadId() & "." & qtopic.name & "store new message, " & recvData
-    spawn qtopic.storeData(recvData)
+    qtopic.storeData(recvData)
    
 
 proc size*(self: ref QTopic): int =
