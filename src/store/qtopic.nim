@@ -1,4 +1,4 @@
-import options, net, locks, strformat, sequtils, sugar
+import options, net, locks, strformat, sequtils, sugar, os
 import std/enumerate
 import subscriber
 import uuid4
@@ -81,11 +81,11 @@ proc publish*(qtopic: ref QTopic, data: string): void =
   withLock subscLock:
     try:
       for s in qtopic.subscriptions.filter(s => not s.isDisconnected()):
-        let pong = s.ping()
-        if pong:
-          discard s.trySend(&"{data}\r\n")
-        else:
-          s.close()
+        #let pong = s.ping()
+        #if pong:
+        discard s.trySend(&"{data}\r\n")
+        #else:
+        #  s.close()
     except:
       error &"{getThreadId()}.{qtopic.name} failed to send data"
       error getCurrentExceptionMsg()
@@ -122,8 +122,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
   try:
     spawn qsubs.run()
     while true:
-      let pong = qsubs.ping()
-      if not pong:
+      if not qsubs.ping():
         break
       var numOfData = 0
       var recvData = ""
@@ -131,12 +130,13 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
         numOfData = qtopic.store.peek()
         if numOfData > 0:
           recvData = qtopic.store.recv()
-
-      withLock subscLock:
-        if recvData != "":
-          # &"\n\n{getThreadId()} before push: {qtopic.subscriptions.len}"
-          for sbr in qtopic.subscriptions:
-            sbr.push(recvData)
+      if recvData == "":
+        sleep(1000)
+      else:
+        withLock subscLock:
+          if recvData != "":
+            for sbr in qtopic.subscriptions:
+              sbr.push(recvData)
   except:
     error &"{getThreadId()}.{qtopic.name} {getCurrentExceptionMsg()}"
   finally:

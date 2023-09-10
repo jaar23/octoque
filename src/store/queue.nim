@@ -95,7 +95,7 @@ proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
     if queue.topics[t].connectionType == ConnectionType.PUBSUB:
       spawn queue.topics[t].listen()
     else:
-      for n in 0 ..< numOfThread:
+      for n in 0 ..< 1:
         spawn queue.topics[t].listen()
   info(&"Topic is currently listening for requests")
 
