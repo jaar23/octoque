@@ -1,13 +1,16 @@
 import options, net, locks, strformat, sequtils, sugar, os
-import std/enumerate
+import std/enumerate, std/deques
 import subscriber
 import uuid4
 import threadpool
 import octolog
+import segfaults
 
 var
   storeLock: Lock
+  storeCond: Cond
   subscLock: Lock
+  subscCond: Cond
 
 type
   ConnectionType* = enum
@@ -16,8 +19,7 @@ type
   QTopic* = object
     name: string
     qchannel: Channel[string]
-    retryStore: Channel[string]
-    store {.guard: storeLock.}: Channel[string]
+    store {.guard: storeLock.}: Deque[string]
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
     capacity: int
@@ -32,22 +34,27 @@ proc connectionType*(qtopic: ref QTopic): ConnectionType =
 
 
 proc storeData (qtopic: ref QTopic, data: string): void =
-  #debug $getThreadId() & "." & qtopic.name & "store new message, " & data
+  defer:
+    storeCond.signal()
   withLock storeLock:
-    let sent = qtopic.store.trySend(data)
-    if not sent:
-      error &"{getThreadId()}.{qtopic.name} send failed, retrying"
-      error &"{getThreadId()}.{qtopic.name} current store size: {qtopic.store.peek()}"
-      qtopic.retryStore.send(data)
+    if qtopic == nil:
+      debug "!!! waiting qtopic to store new data !!!!"
+      storeCond.wait(storeLock)
+    qtopic.store.addLast(data)
 
 
 proc recv*(qtopic: ref QTopic): Option[string] =
+  defer:
+    storeCond.signal()
+  if qtopic == nil:
+    debug "!!! waiting qtopic to recv!!!!"
+    storeCond.wait(storeLock)
   withLock storeLock:
-    if qtopic.store.peek() > 0:
-      let recvData = qtopic.store.recv()
-      return some(recvData)
-    else:
+    if qtopic.store.len == 0:
       return none(string)
+    else:
+      let recvData = qtopic.store.popFirst()
+      return some(recvData)
 
 
 proc send*(qtopic: ref QTopic, data: string): void =
@@ -56,27 +63,47 @@ proc send*(qtopic: ref QTopic, data: string): void =
 
 
 proc clear*(qtopic: ref QTopic): bool =
+  defer:
+    storeCond.signal()
+  if qtopic == nil:
+    debug "!!! waiting qtopic to clear msg !!!!"
+    storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} clear message"
   withLock storeLock:
-    qtopic.store.close()
-    qtopic.store.open()
-    return qtopic.store.ready()
+    qtopic.store.clear()
+    return qtopic.store.len == 0
 
 
 proc listen*(qtopic: ref QTopic): void {.thread.} =
+  defer:
+    storeCond.signal()
   info &"{getThreadId()}.{qtopic.name} listening"
   while true:
     let recvData = qtopic.qchannel.recv()
     debug $getThreadId() & "." & qtopic.name & "store new message, " & recvData
-    qtopic.storeData(recvData)
+    if qtopic == nil:
+      debug "!!! waiting for qtopic to storedata !!!"
+      storeCond.wait(storeLock)
+
+    qtopic.storeData(recvData) 
    
 
 proc size*(self: ref QTopic): int =
+  defer:
+    storeCond.signal()
+  if self == nil:
+    debug "!!! waiting queue topic !!!"
+    storeCond.wait(storeLock)
   withLock storeLock:
-    return self.store.peek()
+    return self.store.len
 
 
 proc publish*(qtopic: ref QTopic, data: string): void =
+  defer:
+    storeCond.signal()
+  if qtopic == nil:
+    debug "!!!! waiting qtopic to publish !!!"
+    storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} publish to subscriber"
   withLock subscLock:
     try:
@@ -92,6 +119,13 @@ proc publish*(qtopic: ref QTopic, data: string): void =
 
 
 proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
+  defer:
+    subscCond.signal()
+    storeCond.signal()
+  if qtopic == nil:
+    debug "!!! waiting qtopic to unsubscribe!!!"
+    subscCond.wait(subscLock)
+    storeCond.wait(storeLock)
   withLock subscLock:
     var idle = false
     let droppedConn = qtopic.subscriptions.filter(s => s.isDisconnected())
@@ -101,6 +135,7 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
         if s.isDisconnected():
           info &"{subscriber.runnerId()} unsubscribe & remove from subscriptions"
           qtopic.subscriptions.delete(i)
+          subscCond.signal()
     else:
       for (i, s) in enumerate(qtopic.subscriptions.filter(s => s.isDisconnected())):
         if s.connectionId == subscriber.connectionId:
@@ -111,6 +146,13 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 
 
 proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
+  defer:
+    subscCond.signal()
+    storeCond.signal()
+  if qtopic == nil:
+    debug "!!! waiting qtopic to subscribe !!!!"
+    subscCond.wait(subscLock)
+    storeCond.wait(storeLock)
   var qsubs: ref Subscriber
   withLock subscLock:
     qtopic.subscriptions.add(subscriber)
@@ -118,25 +160,29 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       if s.connectionId == subscriber.connectionId:
         qsubs = s
         break
+    subscCond.signal()  
     info &"{getThreadId()}.{qtopic.name} subscriptions size: {qtopic.subscriptions.len}"
+
   try:
     spawn qsubs.run()
     while true:
       if not qsubs.ping():
         break
-      var numOfData = 0
       var recvData = ""
       withLock storeLock:
-        numOfData = qtopic.store.peek()
-        if numOfData > 0:
-          recvData = qtopic.store.recv()
+        if qtopic.store.len == 0:
+          sleep(1000)
+        else:
+          recvData = qtopic.store.popFirst()
       if recvData == "":
         sleep(1000)
       else:
         withLock subscLock:
           if recvData != "":
+            #subscCond.wait(subscLock)
             for sbr in qtopic.subscriptions:
               sbr.push(recvData)
+            subscCond.signal()
   except:
     error &"{getThreadId()}.{qtopic.name} {getCurrentExceptionMsg()}"
   finally:
@@ -147,10 +193,13 @@ proc initQTopic*(name: string, capacity: int,
     connType: ConnectionType = BROKER): ref QTopic =
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.qchannel.open()
-  qtopic.retryStore.open()
+  initCond storeCond
+  initLock storeLock
+  initCond subscCond
+  initLock subscLock
   withLock storeLock:
     qtopic.topicConnectionType = connType
-    qtopic.store.open(capacity)
+    qtopic.store = initDeque[string]()
   withLock subscLock:
     qtopic.subscriptions = newSeq[ref Subscriber]()
   return qtopic
@@ -159,9 +208,12 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.topicConnectionType = connType
   qtopic.qchannel.open()
-  qtopic.retryStore.open()
+  initCond storeCond
+  initLock storeLock
+  initCond subscCond
+  initLock subscLock
   withLock storeLock:
-    qtopic.store.open()
+    qtopic.store = initDeque[string]()
   withLock subscLock:
     qtopic.subscriptions = newSeq[ref Subscriber]()
   return qtopic
