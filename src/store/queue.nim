@@ -1,4 +1,4 @@
-import qtopic, std/options, threadpool, subscriber, net, strformat
+import qtopic, std/options, threadpool, subscriber, net, strformat, sequtils, sugar
 import octolog
 
 type QueueState = enum
@@ -27,6 +27,10 @@ proc addTopic*(queue: ref Queue, topicName: string,
     queue.topics.add(qtopic)
 
 
+proc hasTopic*(queue: ref Queue, topicName: string): bool = 
+  queue.topics.filter(q => q.name == topicName).len > 0
+
+
 proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
   result = none(ref QTopic)
   if topicName == "":
@@ -50,13 +54,13 @@ proc enqueue*(self: ref Queue, topicName: string, data: string): Option[int] =
   return some(numOfMessage)
 
 
-proc dequeue*(self: ref Queue, topicName: string, batchNum: int = 1): Option[
+proc dequeue*(self: ref Queue, topicName: string, batchNum: uint8 = 1): Option[
     seq[string]] =
   debug(&"dequeue {batchNum} of message from {topicName}")
   var topic: Option[ref QTopic] = self.find(topicName)
   var outData = newSeq[string]()
   if topic.isSome:
-    for n in 0..<batchNum:
+    for n in 0..<batchNum.int():
       var data: Option[string] = topic.get.recv()
       if data.isSome:
         outData.add(data.get)
