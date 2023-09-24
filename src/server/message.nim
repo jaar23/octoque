@@ -16,8 +16,8 @@ type
     UNSUBSCRIBE = "UNSUBSCRIBE"
     PING        = "PING"
     CLEAR       = "CLEAR"
-    CONNECT     = "CONNECT"
-    DISCONNECT  = "DISCONNECT"
+    #CONNECT     = "CONNECT"
+    #DISCONNECT  = "DISCONNECT"
     ACKNOWLEDGE = "ACKNOWLEDGE"
   
   Protocol* = enum
@@ -30,13 +30,13 @@ type
 
   QHeader* = object
     protocol*: Protocol
-    keepAlive*: uint32
     length*: uint32
     transferMethod*: TransferMethod
-    payloadRows*: uint8
-    batchNumber*: uint8
+    payloadRows*: uint8 # number of payload rows
+    numberOfMsg*: uint8 # number of messages
     command*: QCommand
     topic*: string
+    # keepAlive*: uint32
 
   ParseError* = object of CatchableError
 
@@ -60,10 +60,10 @@ proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
     result = PING
   of "CLEAR":
     result = CLEAR
-  of "CONNECT":
-    result = CONNECT
-  of "DISCONNECT":
-    result = DISCONNECT
+  #of "CONNECT":
+  #  result = CONNECT
+  #of "DISCONNECT":
+  #  result = DISCONNECT
   of "ACKNOWLEDGE":
     result = ACKNOWLEDGE
   else:
@@ -92,19 +92,27 @@ proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
     raise newException(ParseError, "invalid transfer method")
   
 
-#OTQ  BATCH 1 3600 4000000 PUT DEFAULT 2
+#OTQ PUT default 1 BATCH 11
+#hello world
 #XXXXXXXXXXXXXX
 proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   result =  QHeader()
   let lineArr = line.split(" ")
   result.protocol = parseProtocol(lineArr[0])
-  result.transferMethod = parseTransferMethod(lineArr[1])
-  result.payloadRows = lineArr[2].parseInt().uint8()
-  result.keepAlive = lineArr[3].parseInt().uint32()
-  result.length = lineArr[4].parseInt().uint32()
-  result.command = parseQCommand(lineArr[5])
-  result.topic = lineArr[6].strip()
-  result.batchNumber = lineArr[7].parseInt().uint8()
+  result.command = parseQCommand(lineArr[1])
+  result.topic = lineArr[2].strip()
+
+  if result.command == GET:
+    result.numberOfMsg = lineArr[3].parseInt().uint8()
+    result.transferMethod = parseTransferMethod(lineArr[4])
+
+  if result.command == PUT or result.command == PUTACK:
+    result.payloadRows = lineArr[3].parseInt().uint8()
+    result.transferMethod = parseTransferMethod(lineArr[4])
+    result.length = lineArr[5].parseInt().uint32()
+  # long running connection required keep alive
+  # TODO: evaluate if long running connection is required
+  # result.keepAlive = lineArr[3].parseInt().uint32()
   
 
 
