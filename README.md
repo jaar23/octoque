@@ -12,7 +12,20 @@ todo:
 [p] standardize response
 
 [p] standardize request
-
+    
+    example:
+    
+    - get command
+        ```
+        OTQ GET default 1 BATCH
+        ```
+    
+    -  put command 
+        ```
+        OTQ PUT default 1  BATCH 11
+        hello world
+        ```
+    
 [p] streaming of data
 
 [ ] new topic on the fly
