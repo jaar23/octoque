@@ -4,7 +4,7 @@ import octolog, os, strutils
 
 ## TODO: init from config file
 proc main() =
-  let server = new_queue_server("0.0.0.0", 6789)
+  let server = newQueueServer("0.0.0.0", 6789)
   server.addQueueTopic("default", BROKER)
   server.addQueueTopic("pubsub", PUBSUB)
   var numOfThread = 2

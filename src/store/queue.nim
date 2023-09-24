@@ -1,5 +1,6 @@
 import qtopic, std/options, threadpool, subscriber, net, strformat, sequtils, sugar
 import octolog
+from uuid4 import initUuid
 
 type QueueState = enum
   RUNNING, PAUSED, STOPPED, STARTED
@@ -105,7 +106,7 @@ proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
 
 
 proc subscribe*(queue: ref Queue, topicName: string,
-    connection: Socket): void {.thread.} =
+    connection: Socket): void =
   defer:
     info "synchronizing remaining threads"
     sync()
@@ -131,6 +132,16 @@ proc subscribe*(queue: ref Queue, topicName: string,
     if topic.isSome:
       info(&"{getThreadId()} exit thread")
       topic.get.unsubscribe(subscriber)
+
+
+proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
+  var connectionId = initUuid(connId)
+  var topic: Option[ref QTopic] = queue.find(topicName)
+  try:
+    if topic.isSome:
+      topic.get.unsubscribe(connectionId)
+  except:
+    error(getCurrentExceptionMsg())
 
 
 proc newQueue*(): ref Queue =

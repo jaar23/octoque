@@ -38,7 +38,7 @@ proc storeData (qtopic: ref QTopic, data: string): void =
     storeCond.signal()
   withLock storeLock:
     if qtopic == nil:
-      debug "!!! waiting qtopic to store new data !!!!"
+      #debug "!!! waiting qtopic to store new data !!!!"
       storeCond.wait(storeLock)
     qtopic.store.addLast(data)
 
@@ -47,7 +47,7 @@ proc recv*(qtopic: ref QTopic): Option[string] =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    debug "!!! waiting qtopic to recv!!!!"
+    #debug "!!! waiting qtopic to recv!!!!"
     storeCond.wait(storeLock)
   withLock storeLock:
     if qtopic.store.len == 0:
@@ -66,7 +66,7 @@ proc clear*(qtopic: ref QTopic): bool =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    debug "!!! waiting qtopic to clear msg !!!!"
+    #debug "!!! waiting qtopic to clear msg !!!!"
     storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} clear message"
   withLock storeLock:
@@ -80,9 +80,9 @@ proc listen*(qtopic: ref QTopic): void {.thread.} =
   info &"{getThreadId()}.{qtopic.name} listening"
   while true:
     let recvData = qtopic.qchannel.recv()
-    debug $getThreadId() & "." & qtopic.name & "store new message, " & recvData
+    debug $getThreadId() & "." & qtopic.name & " store new message, " & recvData
     if qtopic == nil:
-      debug "!!! waiting for qtopic to storedata !!!"
+      #debug "!!! waiting for qtopic to storedata !!!"
       storeCond.wait(storeLock)
 
     qtopic.storeData(recvData) 
@@ -92,7 +92,7 @@ proc size*(self: ref QTopic): int =
   defer:
     storeCond.signal()
   if self == nil:
-    debug "!!! waiting queue topic !!!"
+    #debug "!!! waiting queue topic !!!"
     storeCond.wait(storeLock)
   withLock storeLock:
     return self.store.len
@@ -102,7 +102,7 @@ proc publish*(qtopic: ref QTopic, data: string): void =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    debug "!!!! waiting qtopic to publish !!!"
+    #debug "!!!! waiting qtopic to publish !!!"
     storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} publish to subscriber"
   withLock subscLock:
@@ -123,7 +123,7 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     subscCond.signal()
     storeCond.signal()
   if qtopic == nil:
-    debug "!!! waiting qtopic to unsubscribe!!!"
+    #debug "!!! waiting qtopic to unsubscribe!!!"
     subscCond.wait(subscLock)
     storeCond.wait(storeLock)
   withLock subscLock:
@@ -133,7 +133,7 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       idle = true
       for (i, s) in enumerate(qtopic.subscriptions):
         if s.isDisconnected():
-          info &"{subscriber.runnerId()} unsubscribe & remove from subscriptions"
+          info &"{subscriber.runnerId()} unsubscribe and remove from subscriptions"
           qtopic.subscriptions.delete(i)
           subscCond.signal()
     else:
@@ -145,12 +145,31 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     info &"{subscriber.runnerId()} exit unsubscribe, remaining: {qtopic.subscriptions.len}"
 
 
+proc unsubscribe*(qtopic: ref QTopic, connId: Uuid): void =
+  defer:
+    subscCond.signal()
+    storeCond.signal()
+  if qtopic == nil:
+    subscCond.wait(subscLock)
+    storeCond.wait(storeLock)
+  withLock subscLock:
+    if qtopic.subscriptions.len == 0:
+      return
+    for (i, s) in enumerate(qtopic.subscriptions):
+      if s.connectionId == connId:
+        info(s.runnerId() & "unsubscribe and remove from subscriptions")
+        s.close()
+        qtopic.subscriptions.delete(i)
+        subscCond.signal()
+        break
+
+
 proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
   defer:
     subscCond.signal()
     storeCond.signal()
   if qtopic == nil:
-    debug "!!! waiting qtopic to subscribe !!!!"
+    #debug "!!! waiting qtopic to subscribe !!!!"
     subscCond.wait(subscLock)
     storeCond.wait(storeLock)
   var qsubs: ref Subscriber
