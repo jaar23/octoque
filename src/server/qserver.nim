@@ -1,6 +1,6 @@
 import ../store/queue, ../store/qtopic
 import message, errcode
-import net, options, strutils, strformat, threadpool, uuid4
+import net, options, strutils, strformat, threadpool
 import octolog
 
 

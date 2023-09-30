@@ -1,21 +1,48 @@
-import server/qserver, store/qtopic
-import octolog, os, strutils
+import server/[qserver, repl], store/qtopic
+import octolog, os, strutils, times, strformat
+import argparse
+
+
+var serverOpts = newParser:
+  option("-i", "--interactive", default = some("n"))
+  option("-b", "--brokerthread", default = some("2"))
+  option("-l", "--logfile")
+  option("-k", "--usefilelogger", default = some("y"))
+  option("-a", "--address", default = some("0.0.0.0"))
+  option("-p", "--port", default = some("6789"))
+  help("{prog} is a simple queue system with broker and pubsub implementation.\n")
 
 
 ## TODO: init from config file
 proc main() =
-  let server = newQueueServer("0.0.0.0", 6789)
+  var args = commandLineParams()
+  var opts = serverOpts.parse(args)
+  var useconsolelogger = if opts.interactive == "y": false else: true
+  var logfile = if opts.logfile_opt.isSome: opts.logfile else: now().format("yyyyMMddHHmm")
+  var usefilelogger = if opts.usefilelogger == "n": false else: true
+
+  octologStart(filename = logfile, usefilelogger = usefilelogger,
+      useconsolelogger = useconsolelogger)
+  info &"octoque is started {opts.address}:{opts.port}"
+  if opts.interactive == "y":
+    replStart()
+  let server = newQueueServer(opts.address, opts.port.parseInt())
   server.addQueueTopic("default", BROKER)
   server.addQueueTopic("pubsub", PUBSUB)
-  var numOfThread = 2
-  if paramCount() > 0:
-    numOfThread = paramStr(1).parseInt()
+  var numOfThread = opts.brokerthread.parseInt()
   server.start(numOfThread)
+  info &"octoque is terminated"
+  octologStop()
+
 
 
 when isMainModule:
-  octologStart()
-  info "octobus is started at 0.0.0.0:6789"
-  main()
-  info "server terminated"
-  octologStop()
+  try:
+    main()
+  except ShortCircuit as err:
+    if err.flag == "argparse_help":
+      echo err.help
+      quit(1)
+  except CatchableError:
+    stderr.writeLine getCurrentExceptionMsg()
+    quit(1)

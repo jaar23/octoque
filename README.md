@@ -9,9 +9,9 @@ todo:
 
 [x] logging for common and pubsub channel
 
-[p] standardize response
+[x] standardize response
 
-[p] standardize request
+[x] standardize request
     
     example:
     
@@ -30,7 +30,7 @@ todo:
 
 [ ] new topic on the fly
 
-[ ] REPL
+[p] REPL
 
 [ ] init with file config
 
