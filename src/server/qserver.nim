@@ -70,7 +70,8 @@ proc procced(server: QueueServer, client: Socket): void =
 # proc disconnect(server: var QueueServer): void =
 
 
-proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[string]]): void =
+proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[
+    string]]): void =
   if msgSeq.isSome and msgSeq.get.len > 0:
     for msg in msgSeq.get:
       client.send(msg & "\n")
@@ -110,14 +111,14 @@ proc unsubscribe(server: QueueServer, client: Socket, topicName: string): void =
   server.queue.unsubscribe(topicName, line)
 
 
-proc execute(server: QueueServer, client: Socket): void {.thread.} = 
+proc execute(server: QueueServer, client: Socket): void {.thread.} =
   try:
     let headerLine = client.recvLine()
-  
+    info "incoming: " & headerLine
     if headerLine.len != 0:
       #parse header
       let qheader = parseQHeader(headerLine)
-     
+
       if qheader.protocol != OTQ:
         raise newException(ProcessError, $NOT_IMPLEMENTED)
       if not server.queue.hasTopic(qheader.topic):
@@ -167,9 +168,9 @@ proc start*(server: QueueServer, numOfThread: int): void =
   info(&"server is listening on 0.0.0.0: {server.port}")
 
   while true:
-    var client: Socket
     #var address = ""
     #socket.acceptAddr(client, address)
+    var client: Socket
     socket.accept(client)
     info("processing client request from " & $client.getPeerAddr())
     spawn server.execute(client)

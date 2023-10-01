@@ -45,7 +45,7 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
 
 
 proc publish*(subscriber: ref Subscriber): void =
-  if subscriber.channel.peek() >  0:
+  if subscriber.channel.peek() > 0:
     let recvData = subscriber.channel.recv()
     let sent: bool = subscriber.trySend(recvData)
     if not sent:

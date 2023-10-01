@@ -1,16 +1,38 @@
 import std/rdstdin
-import threadpool
+import threadpool, net, strutils
 
 
-proc repl(): void =
+proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
+  var conn = net.dial(serverAddr, Port(serverPort))
+  conn.send(line & "\n")
+  var resp = conn.recvLine()
+  if resp.strip() == "PROCEED":
+    return conn
+  else:
+    echo "error: " & resp
+    return nil
+
+
+proc repl(serverAddr: string, serverPort: int): void =
   echo "start repl session"
-  var line: string
+  var headerLine: string
+  var dataLine: string
+  var acqConn = true
+  var conn: Socket
   while true:
-    let ok = readLineFromStdin("\n", line)
-    if not ok: break
-    if line.len > 0:
-      echo line
+    if conn != nil:
+      let dataOk = readLineFromStdin("\n", dataLine)
+      if not dataOk: break
+      conn.send(dataLine & "\n")
+      var dataResp = conn.recvLine()
+      echo dataResp
+      conn = nil
+    else:
+      let ok = readLineFromStdin("\n", headerLine)
+      if not ok: break
+      if headerLine.len > 0:
+        conn = acqConn(serverAddr, serverPort, headerLine)
   echo "exit repl session"
 
-proc replStart*(): void = 
-  spawn repl()
+proc replStart*(address: string, port: int): void =
+  spawn repl(address, port)

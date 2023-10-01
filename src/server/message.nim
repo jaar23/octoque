@@ -8,18 +8,18 @@ import strutils
 
 type
   QCommand* = enum
-    GET         = "GET"
-    PUT         = "PUT"
-    PUTACK      = "PUTACK"
-    PUBLISH     = "PUBLISH"
-    SUBSCRIBE   = "SUBSCRIBE"
+    GET = "GET"
+    PUT = "PUT"
+    PUTACK = "PUTACK"
+    PUBLISH = "PUBLISH"
+    SUBSCRIBE = "SUBSCRIBE"
     UNSUBSCRIBE = "UNSUBSCRIBE"
-    PING        = "PING"
-    CLEAR       = "CLEAR"
+    PING = "PING"
+    CLEAR = "CLEAR"
     #CONNECT     = "CONNECT"
     #DISCONNECT  = "DISCONNECT"
     ACKNOWLEDGE = "ACKNOWLEDGE"
-  
+
   Protocol* = enum
     OTQ,
     CUSTOM
@@ -90,13 +90,13 @@ proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
     result = STREAM
   else:
     raise newException(ParseError, "invalid transfer method")
-  
+
 
 #OTQ PUT default 1 BATCH 11
 #hello world
 #XXXXXXXXXXXXXX
 proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
-  result =  QHeader()
+  result = QHeader()
   let lineArr = line.split(" ")
   result.protocol = parseProtocol(lineArr[0])
   result.command = parseQCommand(lineArr[1])
@@ -113,6 +113,6 @@ proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   # long running connection required keep alive
   # TODO: evaluate if long running connection is required
   # result.keepAlive = lineArr[3].parseInt().uint32()
-  
+
 
 

@@ -28,7 +28,7 @@ proc addTopic*(queue: ref Queue, topicName: string,
     queue.topics.add(qtopic)
 
 
-proc hasTopic*(queue: ref Queue, topicName: string): bool = 
+proc hasTopic*(queue: ref Queue, topicName: string): bool =
   queue.topics.filter(q => q.name == topicName).len > 0
 
 

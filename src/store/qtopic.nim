@@ -85,8 +85,8 @@ proc listen*(qtopic: ref QTopic): void {.thread.} =
       #debug "!!! waiting for qtopic to storedata !!!"
       storeCond.wait(storeLock)
 
-    qtopic.storeData(recvData) 
-   
+    qtopic.storeData(recvData)
+
 
 proc size*(self: ref QTopic): int =
   defer:
@@ -179,7 +179,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       if s.connectionId == subscriber.connectionId:
         qsubs = s
         break
-    subscCond.signal()  
+    subscCond.signal()
     info &"{getThreadId()}.{qtopic.name} subscriptions size: {qtopic.subscriptions.len}"
 
   try:

@@ -52,7 +52,7 @@ proc trySend*(qclient: ref QClient, data: string): bool =
 
 
 proc publish*(qclient: ref QClient): void =
-  if qclient.channel.peek() >  0:
+  if qclient.channel.peek() > 0:
     let recvData = qclient.channel.recv()
     let sent: bool = qclient.trySend(recvData)
     if not sent:
