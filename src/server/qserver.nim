@@ -133,9 +133,11 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
         server.response(client, msgSeq)
       of PUT, PUTACK:
+        #server.procced(client)
         server.store(client, qheader)
       of PUBLISH:
         # haven't confirm the behavior of publish, leaving it an alias of PUT
+        #server.procced(client)
         server.store(client, qheader)
       of SUBSCRIBE:
         server.subscribe(client, qheader.topic)

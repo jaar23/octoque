@@ -43,7 +43,7 @@ type
 
 proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
   let cmd = command.strip()
-  case cmd
+  case cmd.toUpperAscii()
   of "GET":
     result = GET
   of "PUT":
@@ -72,7 +72,7 @@ proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
 
 proc parseProtocol(protocol: string): Protocol {.raises: ParseError.} =
   let ptl = protocol.strip()
-  case ptl
+  case ptl.toUpperAscii()
   of "OTQ":
     result = OTQ
   of "CUSTOM":
@@ -83,7 +83,7 @@ proc parseProtocol(protocol: string): Protocol {.raises: ParseError.} =
 
 proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
   let mtd = mtd.strip()
-  case mtd
+  case mtd.toUpperAscii()
   of "BATCH":
     result = BATCH
   of "STREAM":
