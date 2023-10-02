@@ -1,6 +1,5 @@
-import rdstdin,terminal
 import threadpool, net, strutils
-
+import message
 
 proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
   var conn = net.dial(serverAddr, Port(serverPort))
@@ -21,42 +20,44 @@ proc repl(serverAddr: string, serverPort: int): void =
   var acqConn = true
   var conn: Socket
   var running = true
-  var command = ""
+  var qheader: QHeader
   while running:
     if conn != nil:
-      if command == "PUT":
-        stdout.write "data    >"
-        dataLine = readLine(stdin)
-        #if not dataOk: break
-        if dataLine == "quit": 
-          running = false
-          break
-        conn.send(dataLine & "\n")
-      var dataResp = conn.recvLine()
-      if dataResp.strip().len == 0:
-        stdout.writeLine "result  >empty response"
-      else:
-        stdout.writeLine "result  >" & dataResp
+      if qheader.command == PUT or qheader.command == PUTACK:
+        for row in 0.uint8()..<qheader.payloadRows:
+          stdout.write "[data    ] "
+          dataLine = readLine(stdin)
+          if dataLine == "quit": 
+            running = false
+            break
+          conn.send(dataLine & "\n")
+      for numOfMsg in 0.uint8..<qheader.numberOfMsg:
+        var dataResp = conn.recvLine()
+        if dataResp.strip().len > 0:
+          stdout.writeLine "[result  ] " & dataResp
       conn = nil
     else:
-      stdout.write "command >"
-      #let ok = readLineFromStdin("\n", headerLine)
+      stdout.write "[command ] "
       headerLine = readLine(stdin)
-      #if not ok: break
       if headerLine == "quit": 
         running = false
         break
-      if headerLine.len > 0:
-        conn = acqConn(serverAddr, serverPort, headerLine)
-        if headerLine.toUpperAscii().contains("PUT") or 
-        headerLine.toUpperAscii().contains("PUB"):
-          command = "PUT"
-        elif headerLine.toUpperAscii().contains("PING"):
-          var resp = conn.recvLine()
-          #stdout.write "data   >"
-          stdout.writeLine "result  >" & resp
-        else:
-          command = "GET"
+      else:
+        try:
+          qheader = parseQHeader(headerLine)
+          if qheader.command == PING:
+            var conn = net.dial(serverAddr, Port(serverPort))
+            conn.send(headerLine & "\n")
+            var resp = conn.recvLine()
+            stdout.writeLine "[result  ] " & resp
+          elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or 
+          qheader.command == SUBSCRIBE:
+            stdout.writeLine "[result  ] " & "this command does not support in repl currently"
+          else:
+            conn = acqConn(serverAddr, serverPort, headerLine)
+        except:
+          stdout.writeLine "[error   ] " & getCurrentExceptionMsg()
+
   echo "exit repl session"
   quit(0)
 

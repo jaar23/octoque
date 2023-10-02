@@ -32,8 +32,8 @@ type
     protocol*: Protocol
     length*: uint32
     transferMethod*: TransferMethod
-    payloadRows*: uint8 # number of payload rows
-    numberOfMsg*: uint8 # number of messages
+    payloadRows*: uint8 = 1# number of payload rows
+    numberOfMsg*: uint8 = 1# number of messages
     command*: QCommand
     topic*: string
     # keepAlive*: uint32

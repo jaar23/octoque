@@ -126,26 +126,28 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
 
       # parse successfully
       # check if queue is ready for input and output
-      server.procced(client)
 
       case qheader.command:
       of GET:
+        server.procced(client)
         let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
         server.response(client, msgSeq)
       of PUT, PUTACK:
-        #server.procced(client)
+        server.procced(client)
         server.store(client, qheader)
       of PUBLISH:
         # haven't confirm the behavior of publish, leaving it an alias of PUT
-        #server.procced(client)
+        server.procced(client)
         server.store(client, qheader)
       of SUBSCRIBE:
+        server.procced(client)
         server.subscribe(client, qheader.topic)
       of UNSUBSCRIBE:
         server.unsubscribe(client, qheader.topic)
       of PING:
         server.ping(client)
       of CLEAR:
+        server.procced(client)
         server.clear(client, qheader)
       # of CONNECT:
       #   echo "not implemented"
