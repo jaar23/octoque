@@ -30,7 +30,11 @@ todo:
 
 [ ] new topic on the fly
 
-[p] REPL
+[x] REPL, send command to octoque without using the client. Currently do not support for pubsub command.
+   
+    example:
+
+    - start with `octoque --interactive y`
 
 [ ] init with file config
 
