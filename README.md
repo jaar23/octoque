@@ -28,7 +28,12 @@ todo:
     
 [p] streaming of data
 
-[p] new topic on the fly
+[x] new topic on the fly
+    
+    example:
+    ```
+    OTQ NEW APPTOPIC BROKER
+    ```
 
 [x] REPL, send command to octoque without using the client. Currently do not support for pubsub command.
    
