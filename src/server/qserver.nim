@@ -10,7 +10,6 @@ type
     port: int
     queue: ref Queue
     running: bool
-    # qclients: seq[ref QClient]
 
   QueueResponse* = object
     status: string
@@ -60,7 +59,7 @@ proc procced(server: QueueServer, client: Socket): void =
   client.send("PROCEED\n")
 
 
-## TODO: authentication
+## TODO: authentication with external secure service
 # proc connect(server: ref QueueServer, client: Socket, qheader: QHeader): void =
 #   var qclient = newQClient(client, getThreadId())
 #   server.qclients.add(qclient)

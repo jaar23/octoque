@@ -28,7 +28,7 @@ todo:
     
 [p] streaming of data
 
-[ ] new topic on the fly
+[p] new topic on the fly
 
 [x] REPL, send command to octoque without using the client. Currently do not support for pubsub command.
    
@@ -44,6 +44,8 @@ todo:
 
 [ ] schema based queue
 
-[p] batch delivery
+[x] batch delivery
 
+[ ] secure queue access with external secure services
 
+[ ] file-based authentication as default secure service
