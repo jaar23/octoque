@@ -5,6 +5,7 @@
 ## [COMMAND][TOPIC]
 ## [PAYLOAD]
 import strutils
+from ../store/qtopic import ConnectionType
 
 type
   QCommand* = enum
@@ -16,6 +17,8 @@ type
     UNSUBSCRIBE = "UNSUBSCRIBE"
     PING = "PING"
     CLEAR = "CLEAR"
+    NEW = "NEW"
+    DISPLAY = "DISPLAY"
     #CONNECT     = "CONNECT"
     #DISCONNECT  = "DISCONNECT"
     ACKNOWLEDGE = "ACKNOWLEDGE"
@@ -30,12 +33,16 @@ type
 
   QHeader* = object
     protocol*: Protocol
-    length*: uint32
     transferMethod*: TransferMethod
     payloadRows*: uint8 = 1# number of payload rows
     numberOfMsg*: uint8 = 1# number of messages
     command*: QCommand
     topic*: string
+    topicSize*: int = 0
+    connectionType*: ConnectionType = BROKER
+    lifespan*: int = 0
+    numberofThread: uint = 2
+    #length*: uint32
     # keepAlive*: uint32
 
   ParseError* = object of CatchableError
@@ -60,14 +67,18 @@ proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
     result = PING
   of "CLEAR":
     result = CLEAR
+  of "DISPLAY":
+    result = DISPLAY
   #of "CONNECT":
   #  result = CONNECT
   #of "DISCONNECT":
   #  result = DISCONNECT
+  of "NEW":
+    result = NEW
   of "ACKNOWLEDGE":
     result = ACKNOWLEDGE
   else:
-    raise newException(ParseError, "invalid command")
+    raise newException(ParseError, "Invalid command")
 
 
 proc parseProtocol(protocol: string): Protocol {.raises: ParseError.} =
@@ -78,7 +89,7 @@ proc parseProtocol(protocol: string): Protocol {.raises: ParseError.} =
   of "CUSTOM":
     result = CUSTOM
   else:
-    raise newException(ParseError, "invalid Protocol")
+    raise newException(ParseError, "Invalid Protocol")
 
 
 proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
@@ -89,12 +100,23 @@ proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
   of "STREAM":
     result = STREAM
   else:
-    raise newException(ParseError, "invalid transfer method")
+    raise newException(ParseError, "Invalid transfer method")
 
+
+proc parseTopicConnectionType(topicType: string): ConnectionType {.raises: ParseError.} = 
+  let ttype = topicType.strip()
+  case ttype.toUpperAscii():
+  of "BROKER":
+    result = BROKER
+  of "PUBSUB":
+    result = PUBSUB
+  else:
+    raise newException(ParseError, "Invalid connection type, accept only BROKER, PUBSUB")
 
 #OTQ PUT default 1 BATCH 11
 #hello world
 #XXXXXXXXXXXXXX
+#TODO more elegant way to parse different command message
 proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   result = QHeader()
   let lineArr = line.split(" ")
@@ -109,7 +131,17 @@ proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   if result.command == PUT or result.command == PUTACK:
     result.payloadRows = lineArr[3].parseInt().uint8()
     result.transferMethod = parseTransferMethod(lineArr[4])
-    result.length = lineArr[5].parseInt().uint32()
+    if lineArr.len > 5:
+      result.lifespan = lineArr[5].parseInt()
+
+  if result.command == NEW:
+    if lineArr.len < 3:
+      raise newException(ParseError, "Missing connection type for new topic")
+    result.connectionType = parseTopicConnectionType(lineArr[3])
+    if lineArr.len > 4:
+      result.topicSize = lineArr[4].parseInt()
+    if lineArr.len > 5:
+      result.numberofThread = lineArr[5].parseInt().uint()
   # long running connection required keep alive
   # TODO: evaluate if long running connection is required
   # result.keepAlive = lineArr[3].parseInt().uint32()

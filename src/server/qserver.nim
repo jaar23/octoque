@@ -25,7 +25,6 @@ proc newQueueServer*(address: string, port: int): QueueServer =
   var qserver = QueueServer(address: address, port: port)
   qserver.queue = newQueue()
   qserver.running = true
-  # qserver.qclients = newSeq[ref QClient]()
   return qserver
 
 
@@ -36,7 +35,6 @@ proc initQueueServer*(address: string, port: int, topics: varargs[string],
   qserver.queue = queue
   qserver.queue.startListener(workerNumber)
   qserver.running = true
-  # qserver.qclients = newSeq[ref QClient]()
   return qserver
 
 
@@ -57,6 +55,10 @@ proc newQueueResponse*(status: string, code: int, message: string,
 
 proc procced(server: QueueServer, client: Socket): void =
   client.send("PROCEED\n")
+
+
+proc decline(server: QueueServer, client: Socket, reason: string): void =
+  client.send("DECLINE:" & reason & "\n")
 
 
 ## TODO: authentication with external secure service
@@ -110,6 +112,30 @@ proc unsubscribe(server: QueueServer, client: Socket, topicName: string): void =
   server.queue.unsubscribe(topicName, line)
 
 
+proc newtopic(server: QueueServer, client: Socket, topicName: string,
+    capacity: int, connectionType: ConnectionType): void =
+  var topic: ref QTopic
+  if capacity > 0:
+    topic = initQTopic(topicName, capacity, connectionType)
+  else:
+    topic = initQTopicUnlimited(topicName, connectionType)
+  server.queue.addTopic(topic)
+  server.queue.startTopicListener(topic.name)
+  client.send("SUCCESS\n")
+
+
+proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =
+  let topicName = qheader.topic
+  debug "topic name: " & topicName
+  if topicName == "*":
+    for topic in server.queue.topics:
+      client.send($topic & "\n")
+  else:
+    for topic in server.queue.topics:
+      if topic.name == topicName:
+        client.send($topic & "\n")
+        break
+
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
   try:
     let headerLine = client.recvLine()
@@ -117,15 +143,12 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
     if headerLine.len != 0:
       #parse header
       let qheader = parseQHeader(headerLine)
-
+      debug "qheader: " & $qheader
       if qheader.protocol != OTQ:
         raise newException(ProcessError, $NOT_IMPLEMENTED)
-      if not server.queue.hasTopic(qheader.topic):
+      if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and 
+          qheader.command != NEW:
         raise newException(ProcessError, $TOPIC_NOT_FOUND)
-
-      # parse successfully
-      # check if queue is ready for input and output
-
       case qheader.command:
       of GET:
         server.procced(client)
@@ -148,16 +171,27 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
       of CLEAR:
         server.procced(client)
         server.clear(client, qheader)
-      # of CONNECT:
-      #   echo "not implemented"
-      #  server.connect(client, qheader)
-      # of DISCONNECT:
-      #   echo "not implemented"
+      of NEW:
+        server.procced(client)
+        server.newtopic(client, qheader.topic, qheader.topicSize,
+            qheader.connectionType)
+      of DISPLAY:
+        debug $qheader.topic & "!!!"
+        server.procced(client)
+        debug "call list topic"
+        server.listtopic(client, qheader)
       of ACKNOWLEDGE:
         server.procced(client)
+      # of CONNECT:
+        #   save a session in secure service
+        #   echo "not implemented"
+        #  server.connect(client, qheader)
+        # of DISCONNECT:
+        #   remove session from secure service
+        #   echo "not implemented"
   except:
     let errMsg = getCurrentExceptionMsg()
-    client.send(errMsg)
+    server.decline(client, errMsg)
   finally:
     client.close()
 

@@ -41,6 +41,7 @@ proc storeData (qtopic: ref QTopic, data: string): void =
       #debug "!!! waiting qtopic to store new data !!!!"
       storeCond.wait(storeLock)
     qtopic.store.addLast(data)
+    debug "store new data into " & qtopic.name
 
 
 proc recv*(qtopic: ref QTopic): Option[string] =
@@ -95,6 +96,7 @@ proc size*(self: ref QTopic): int =
     #debug "!!! waiting queue topic !!!"
     storeCond.wait(storeLock)
   withLock storeLock:
+    debug "store len: " & $self.store.len
     return self.store.len
 
 
@@ -237,4 +239,12 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
     qtopic.subscriptions = newSeq[ref Subscriber]()
   return qtopic
 
+
+proc `$`*(qtopic: ref QTopic): string = 
+  result = "-----------------------------------------------------\n"
+  result &= "| Name              : " & qtopic.name & "\n"
+  result &= "| Connection Type   : " & $qtopic.connectionType & "\n"
+  result &= "| Capacity          : " & $qtopic.capacity & "\n"
+  result &= "| Store Size        : " & $qtopic.size() & "\n"
+  result &= "-----------------------------------------------------\n"
 

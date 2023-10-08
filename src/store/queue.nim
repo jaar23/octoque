@@ -93,7 +93,7 @@ proc countqueue*(queue: ref Queue, topicName: string): int =
     return 0
 
 
-proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
+proc startListener*(queue: ref Queue, numOfThread: int = 2): void =
   info(&"BROKER topic has {numOfThread} worker(s)")
   info(&"PUBSUB topic has 1 worker")
   for t in 0 ..< queue.topics.len:
@@ -103,6 +103,19 @@ proc startListener*(queue: ref Queue, numOfThread: int = 3): void =
       for n in 0 ..< 1:
         spawn queue.topics[t].listen()
   info(&"Topic is currently listening for requests")
+
+
+proc startTopicListener*(queue: ref Queue, topicName: string, numOfThread: int = 2): void = 
+  info(&"BROKER topic has {numOfThread} worker(s)")
+  info(&"PUBSUB topic has 1 worker")
+  let topic = queue.find(topicName)
+  if topic.isSome:
+    if topic.get.connectionType == BROKER:
+      for t in 0..<numOfThread:
+        spawn topic.get.listen()
+    else:
+      spawn topic.get.listen()
+  info(&"Topic({topicName}) is currently listening for requests")
 
 
 proc subscribe*(queue: ref Queue, topicName: string,
@@ -150,6 +163,7 @@ proc newQueue*(): ref Queue =
   queue.topics = newSeq[ref QTopic]()
   return queue
 
+
 proc initQueue*(topicNames: varargs[string]): ref Queue =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
@@ -158,12 +172,12 @@ proc initQueue*(topicNames: varargs[string]): ref Queue =
     queue.addTopic(topic)
   return queue
 
+
 proc initQueue*(topics: varargs[ref QTopic]): ref Queue =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
   for topic in items(topics):
     queue.addTopic(topic)
   return queue
-
 
 

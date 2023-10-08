@@ -1,5 +1,41 @@
-import threadpool, net, strutils
+import threadpool, net, strutils, terminal
 import message
+
+
+template stdoutCmd (msg: string) =
+  stdout.setForegroundColor(fgYellow)
+  stdout.write msg
+  stdout.resetAttributes()
+
+
+template stdoutData (msg: string) =
+  stdout.setForegroundColor(fgDefault)
+  stdout.write msg
+  stdout.resetAttributes()
+
+
+template stdoutResult (msg: string) =
+  stdout.setForegroundColor(fgGreen)
+  stdout.write msg
+  stdout.resetAttributes()
+
+
+template stdoutError (msg: string) =
+  stdout.setForegroundColor(fgRed)
+  stdout.write msg
+  stdout.resetAttributes()
+
+
+template stdoutWrite (msg: string) =
+  stdout.resetAttributes()
+  stdout.writeLine msg
+
+
+proc handleDecline(resp: string) =
+    let errMsg = resp.split(":")
+    stdoutError "error   > "
+    stdoutWrite errMsg[1]
+ 
 
 proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
   var conn = net.dial(serverAddr, Port(serverPort))
@@ -9,8 +45,18 @@ proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
     return nil
   if resp.strip() == "PROCEED":
     return conn
+  elif resp.startsWith("DECLINE"):
+    handleDecline(resp)
   else:
     return nil
+
+
+proc readResult(conn: Socket, numberOfMsg: uint8) = 
+  for numOfMsg in 0.uint8..<numberOfMsg:
+    var dataResp = conn.recvLine()
+    if dataResp.strip().len > 0:
+      stdoutResult "result  > "
+      stdoutWrite dataResp
 
 
 proc repl(serverAddr: string, serverPort: int): void =
@@ -25,19 +71,21 @@ proc repl(serverAddr: string, serverPort: int): void =
     if conn != nil:
       if qheader.command == PUT or qheader.command == PUTACK:
         for row in 0.uint8()..<qheader.payloadRows:
-          stdout.write "data    > "
+          stdoutData "data    > "
           dataLine = readLine(stdin)
           if dataLine == "quit": 
             running = false
             break
           conn.send(dataLine & "\n")
-      for numOfMsg in 0.uint8..<qheader.numberOfMsg:
-        var dataResp = conn.recvLine()
-        if dataResp.strip().len > 0:
-          stdout.writeLine "result  > " & dataResp
+      if qheader.command == DISPLAY:
+        if qheader.topic == "*":
+          qheader.numberOfMsg = 999
+        else:
+          qheader.numberOfMsg = 6
+      readResult(conn, qheader.numberOfMsg)
       conn = nil
     else:
-      stdout.write "command > "
+      stdoutCmd "command > "
       headerLine = readLine(stdin)
       if headerLine == "quit": 
         running = false
@@ -49,14 +97,20 @@ proc repl(serverAddr: string, serverPort: int): void =
             var conn = net.dial(serverAddr, Port(serverPort))
             conn.send(headerLine & "\n")
             var resp = conn.recvLine()
-            stdout.writeLine "result  > " & resp
+            if resp.startsWith("DECLINE"):
+              handleDecline(resp)
+            else:
+              stdoutResult "result  > "
+              stdoutWrite resp
           elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or 
           qheader.command == SUBSCRIBE:
-            stdout.writeLine "result  > " & "this command does not support in repl currently"
+            stdoutResult "result  > "
+            stdoutWrite "this command does not support in repl currently"
           else:
             conn = acqConn(serverAddr, serverPort, headerLine)
         except:
-          stdout.writeLine "error   > " & getCurrentExceptionMsg()
+          stdoutError "error   > "
+          stdoutWrite getCurrentExceptionMsg()
 
   echo "exit repl session"
   quit(0)
