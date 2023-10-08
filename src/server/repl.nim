@@ -25,7 +25,7 @@ proc repl(serverAddr: string, serverPort: int): void =
     if conn != nil:
       if qheader.command == PUT or qheader.command == PUTACK:
         for row in 0.uint8()..<qheader.payloadRows:
-          stdout.write "[data    ] "
+          stdout.write "data    > "
           dataLine = readLine(stdin)
           if dataLine == "quit": 
             running = false
@@ -34,10 +34,10 @@ proc repl(serverAddr: string, serverPort: int): void =
       for numOfMsg in 0.uint8..<qheader.numberOfMsg:
         var dataResp = conn.recvLine()
         if dataResp.strip().len > 0:
-          stdout.writeLine "[result  ] " & dataResp
+          stdout.writeLine "result  > " & dataResp
       conn = nil
     else:
-      stdout.write "[command ] "
+      stdout.write "command > "
       headerLine = readLine(stdin)
       if headerLine == "quit": 
         running = false
@@ -49,14 +49,14 @@ proc repl(serverAddr: string, serverPort: int): void =
             var conn = net.dial(serverAddr, Port(serverPort))
             conn.send(headerLine & "\n")
             var resp = conn.recvLine()
-            stdout.writeLine "[result  ] " & resp
+            stdout.writeLine "result  > " & resp
           elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or 
           qheader.command == SUBSCRIBE:
-            stdout.writeLine "[result  ] " & "this command does not support in repl currently"
+            stdout.writeLine "result  > " & "this command does not support in repl currently"
           else:
             conn = acqConn(serverAddr, serverPort, headerLine)
         except:
-          stdout.writeLine "[error   ] " & getCurrentExceptionMsg()
+          stdout.writeLine "error   > " & getCurrentExceptionMsg()
 
   echo "exit repl session"
   quit(0)
