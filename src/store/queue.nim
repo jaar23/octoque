@@ -1,35 +1,18 @@
 import qtopic, std/options, threadpool, subscriber, net, strformat, sequtils, sugar
 import octolog
 from uuid4 import initUuid
-
-type QueueState = enum
-  RUNNING, PAUSED, STOPPED, STARTED
-
+import ../server/errcode
 
 type
+  QueueState = enum
+    RUNNING, PAUSED, STOPPED, STARTED
+
   Queue* = object
     topics*: seq[ref QTopic]
     state: QueueState
+    topicSize: uint8
 
-
-proc addTopic*(queue: ref Queue, topic: ref QTopic): void =
-  info(&"new topic\t{topic.name}\t(0)\t{topic.connectionType}")
-  queue.topics.add(topic)
-
-
-proc addTopic*(queue: ref Queue, topicName: string,
-    connType: ConnectionType = BROKER, capacity: int = 0): void =
-  info(&"new topic\t{topicName}\t({capacity})\t{connType}")
-  if capacity > 0:
-    var qtopic = initQTopic(topicName, capacity, connType)
-    queue.topics.add(qtopic)
-  else:
-    var qtopic = initQTopicUnlimited(topicName, connType)
-    queue.topics.add(qtopic)
-
-
-proc hasTopic*(queue: ref Queue, topicName: string): bool =
-  queue.topics.filter(q => q.name == topicName).len > 0
+  QueueError* = object of CatchableError
 
 
 proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
@@ -40,6 +23,36 @@ proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
     if q.name == topicName:
       result = some(q)
       break
+
+proc addTopic*(queue: ref Queue, topic: ref QTopic): void {.raises: QueueError.} =
+  info("new topic\t" & topic.name & "\t(0)\t" & $topic.connectionType)
+  if queue.topics.len > queue.topicSize.int():
+    raise newException(QueueError, $EXCEED_ALLOWED_TOPIC &
+        " , maximum topic size is " & $queue.topicSize)
+  if queue.find(topic.name).isSome(): raise newException(QueueError,
+      $TOPIC_EXISTED)
+  queue.topics.add(topic)
+
+
+proc addTopic*(queue: ref Queue, topicName: string,
+    connType: ConnectionType = BROKER, capacity: int = 0): void =
+  info(&"new topic\t{topicName}\t({capacity})\t{connType}")
+  if queue.topics.len > queue.topicSize.int():
+    raise newException(QueueError, $EXCEED_ALLOWED_TOPIC &
+        " , maximum topic size is " & $queue.topicSize)
+  if queue.find(topicName).isSome(): raise newException(QueueError,
+      $TOPIC_EXISTED)
+
+  if capacity > 0:
+    var qtopic = initQTopic(topicName, capacity, connType)
+    queue.topics.add(qtopic)
+  else:
+    var qtopic = initQTopicUnlimited(topicName, connType)
+    queue.topics.add(qtopic)
+
+
+proc hasTopic*(queue: ref Queue, topicName: string): bool =
+  queue.topics.filter(q => q.name == topicName).len > 0
 
 
 proc enqueue*(self: ref Queue, topicName: string, data: string): Option[int] =
@@ -100,12 +113,13 @@ proc startListener*(queue: ref Queue, numOfThread: int = 2): void =
     if queue.topics[t].connectionType == ConnectionType.PUBSUB:
       spawn queue.topics[t].listen()
     else:
-      for n in 0 ..< 1:
+      for n in 0 ..< numOfThread:
         spawn queue.topics[t].listen()
-  info(&"Topic is currently listening for requests")
+  info(&"topic is currently listening for requests")
 
 
-proc startTopicListener*(queue: ref Queue, topicName: string, numOfThread: int = 2): void = 
+proc startTopicListener*(queue: ref Queue, topicName: string,
+    numOfThread: int = 2): void =
   info(&"BROKER topic has {numOfThread} worker(s)")
   info(&"PUBSUB topic has 1 worker")
   let topic = queue.find(topicName)
@@ -115,7 +129,7 @@ proc startTopicListener*(queue: ref Queue, topicName: string, numOfThread: int =
         spawn topic.get.listen()
     else:
       spawn topic.get.listen()
-  info(&"Topic({topicName}) is currently listening for requests")
+  info(&"topic({topicName}) is currently listening for requests")
 
 
 proc subscribe*(queue: ref Queue, topicName: string,
@@ -157,25 +171,36 @@ proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
     error(getCurrentExceptionMsg())
 
 
-proc newQueue*(): ref Queue =
+proc newQueue*(topicSize: uint8 = 8): ref Queue =
   info("initialize new queue")
   var queue = (ref Queue)(state: QueueState.STARTED)
   queue.topics = newSeq[ref QTopic]()
+  queue.topicSize = topicSize.uint8()
   return queue
 
 
-proc initQueue*(topicNames: varargs[string]): ref Queue =
+proc initQueue*(topicNames: varargs[string],
+                topicSize: uint8 = 8): ref Queue {.raises: QueueError.} =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
+  queue.topicSize = topicSize
+  if topicNames.len > topicSize.int():
+    raise newException(QueueError, $EXCEED_ALLOWED_TOPIC &
+        " maximum topic size is " & $topicSize)
   for name in items(topicNames):
     var topic = qtopic.initQTopicUnlimited(name)
     queue.addTopic(topic)
   return queue
 
 
-proc initQueue*(topics: varargs[ref QTopic]): ref Queue =
+proc initQueue*(topics: varargs[ref QTopic],
+                topicSize: uint8 = 8): ref Queue {.raises: QueueError.} =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
+  queue.topicSize = topicSize
+  if topics.len > topicSize.int():
+    raise newException(QueueError, $EXCEED_ALLOWED_TOPIC &
+        " maximum topic size is " & $topicSize)
   for topic in items(topics):
     queue.addTopic(topic)
   return queue

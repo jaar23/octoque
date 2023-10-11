@@ -26,7 +26,11 @@ todo:
         hello world
         ```
     
-[p] streaming of data
+[p] streaming of data 
+    
+    - stream from file
+
+    - stream from memory
 
 [x] new topic on the fly
     
@@ -41,7 +45,7 @@ todo:
 
     - start with `octoque --interactive y`
 
-[ ] init with file config
+[ ] start with file config
 
 [ ] error queue
 
@@ -53,4 +57,18 @@ todo:
 
 [ ] secure queue access with external secure services
 
-[ ] file-based authentication as default secure service
+[p] file-based authentication as default secure service
+
+[ ] replay queue based on log
+
+[ ] COMMIT command to persist store
+
+[ ] monitoring
+
+[x] running in single core cpu environment
+    
+    current implementation keeping the queue data in a long running threads.
+    this required the process to keep multiple threads which causing the program
+    running out of available thread when adding new topic. 
+    after evaluation, current resolution is to limit the number of available topic
+    running in the process. there is always a limitation for a low end hardware.

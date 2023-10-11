@@ -83,9 +83,7 @@ proc listen*(qtopic: ref QTopic): void {.thread.} =
     let recvData = qtopic.qchannel.recv()
     debug $getThreadId() & "." & qtopic.name & " store new message, " & recvData
     if qtopic == nil:
-      #debug "!!! waiting for qtopic to storedata !!!"
       storeCond.wait(storeLock)
-
     qtopic.storeData(recvData)
 
 
@@ -240,7 +238,7 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
   return qtopic
 
 
-proc `$`*(qtopic: ref QTopic): string = 
+proc `$`*(qtopic: ref QTopic): string =
   result = "-----------------------------------------------------\n"
   result &= "| Name              : " & qtopic.name & "\n"
   result &= "| Connection Type   : " & $qtopic.connectionType & "\n"

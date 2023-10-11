@@ -21,17 +21,18 @@ type
   ProcessError* = object of CatchableError
 
 
-proc newQueueServer*(address: string, port: int): QueueServer =
+proc newQueueServer*(address: string, port: int,
+    topicSize: uint8 = 8): QueueServer =
   var qserver = QueueServer(address: address, port: port)
-  qserver.queue = newQueue()
+  qserver.queue = newQueue(topicSize)
   qserver.running = true
   return qserver
 
 
 proc initQueueServer*(address: string, port: int, topics: varargs[string],
-    workerNumber: int): QueueServer =
+                      workerNumber: int, topicSize: uint8 = 8): QueueServer =
   var qserver = QueueServer(address: address, port: port)
-  var queue = initQueue(topics)
+  var queue = initQueue(topics, topicSize)
   qserver.queue = queue
   qserver.queue.startListener(workerNumber)
   qserver.running = true
@@ -43,14 +44,14 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
   qserver.queue.addTopic(topicName, connType, capacity)
 
 
-proc newQueueResponse*(status: string, code: int, message: string,
-    data: string): QueueResponse =
-  var queueResp = QueueResponse()
-  queueResp.code = 0
-  queueResp.status = "ok"
-  queueResp.message = "push to subscriber"
-  queueResp.data = data
-  return queueResp
+# proc newQueueResponse*(status: string, code: int, message: string,
+#     data: string): QueueResponse =
+#   var queueResp = QueueResponse()
+#   queueResp.code = 0
+#   queueResp.status = "ok"
+#   queueResp.message = "push to subscriber"
+#   queueResp.data = data
+#   return queueResp
 
 
 proc procced(server: QueueServer, client: Socket): void =
@@ -120,7 +121,7 @@ proc newtopic(server: QueueServer, client: Socket, topicName: string,
   else:
     topic = initQTopicUnlimited(topicName, connectionType)
   server.queue.addTopic(topic)
-  server.queue.startTopicListener(topic.name)
+  server.queue.startTopicListener(topic.name, 1)
   client.send("SUCCESS\n")
 
 
@@ -146,7 +147,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
       debug "qheader: " & $qheader
       if qheader.protocol != OTQ:
         raise newException(ProcessError, $NOT_IMPLEMENTED)
-      if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and 
+      if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
           qheader.command != NEW:
         raise newException(ProcessError, $TOPIC_NOT_FOUND)
       case qheader.command:
@@ -205,8 +206,6 @@ proc start*(server: QueueServer, numOfThread: int): void =
   info(&"server is listening on 0.0.0.0: {server.port}")
 
   while true:
-    #var address = ""
-    #socket.acceptAddr(client, address)
     var client: Socket
     socket.accept(client)
     info("processing client request from " & $client.getPeerAddr())

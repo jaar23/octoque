@@ -33,9 +33,9 @@ type
 
   QHeader* = object
     protocol*: Protocol
-    transferMethod*: TransferMethod
-    payloadRows*: uint8 = 1# number of payload rows
-    numberOfMsg*: uint8 = 1# number of messages
+    transferMethod*: TransferMethod = BATCH
+    payloadRows*: uint8 = 1 # number of payload rows
+    numberOfMsg*: uint8 = 1 # number of messages
     command*: QCommand
     topic*: string
     topicSize*: int = 0
@@ -103,7 +103,7 @@ proc parseTransferMethod(mtd: string): TransferMethod {.raises: ParseError.} =
     raise newException(ParseError, "Invalid transfer method")
 
 
-proc parseTopicConnectionType(topicType: string): ConnectionType {.raises: ParseError.} = 
+proc parseTopicConnectionType(topicType: string): ConnectionType {.raises: ParseError.} =
   let ttype = topicType.strip()
   case ttype.toUpperAscii():
   of "BROKER":

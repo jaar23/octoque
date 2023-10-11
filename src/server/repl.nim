@@ -32,10 +32,10 @@ template stdoutWrite (msg: string) =
 
 
 proc handleDecline(resp: string) =
-    let errMsg = resp.split(":")
-    stdoutError "error   > "
-    stdoutWrite errMsg[1]
- 
+  let errMsg = resp.split(":")
+  stdoutError "error   > "
+  stdoutWrite errMsg[1]
+
 
 proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
   var conn = net.dial(serverAddr, Port(serverPort))
@@ -51,10 +51,12 @@ proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
     return nil
 
 
-proc readResult(conn: Socket, numberOfMsg: uint8) = 
+proc readResult(conn: Socket, numberOfMsg: uint8) =
   for numOfMsg in 0.uint8..<numberOfMsg:
     var dataResp = conn.recvLine()
-    if dataResp.strip().len > 0:
+    if dataResp.startsWith("DECLINE"):
+      handleDecline(dataResp)
+    elif dataResp.strip().len > 0:
       stdoutResult "result  > "
       stdoutWrite dataResp
 
@@ -73,7 +75,7 @@ proc repl(serverAddr: string, serverPort: int): void =
         for row in 0.uint8()..<qheader.payloadRows:
           stdoutData "data    > "
           dataLine = readLine(stdin)
-          if dataLine == "quit": 
+          if dataLine == "quit":
             running = false
             break
           conn.send(dataLine & "\n")
@@ -87,7 +89,7 @@ proc repl(serverAddr: string, serverPort: int): void =
     else:
       stdoutCmd "command > "
       headerLine = readLine(stdin)
-      if headerLine == "quit": 
+      if headerLine == "quit":
         running = false
         break
       else:
@@ -102,7 +104,7 @@ proc repl(serverAddr: string, serverPort: int): void =
             else:
               stdoutResult "result  > "
               stdoutWrite resp
-          elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or 
+          elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or
           qheader.command == SUBSCRIBE:
             stdoutResult "result  > "
             stdoutWrite "this command does not support in repl currently"

@@ -8,4 +8,5 @@ type
     INVALID_PROTOCOL = "Invalid protocol"
     INVALID_PAYLOADROWS = "Invalid rows of payload, positive number only"
     INVALID_CONTENT_LENGTH = "Invalid content length, positive number only"
-
+    EXCEED_ALLOWED_TOPIC = "Exceed the number of allowed queue topic defined"
+    TOPIC_EXISTED = "Topic is already existed"
