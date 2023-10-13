@@ -16,28 +16,20 @@ todo:
     example:
     
     - get command
-        ```
+        
         OTQ GET default 1 BATCH
-        ```
+       
     
     -  put command 
-        ```
+        
         OTQ PUT default 1  BATCH 11
         hello world
-        ```
-    
-[p] streaming of data 
-    
-    - stream from file
-
-    - stream from memory
-
+       
 [x] new topic on the fly
     
     example:
-    ```
+
     OTQ NEW APPTOPIC BROKER
-    ```
 
 [x] REPL, send command to octoque without using the client. Currently do not support for pubsub command.
    
@@ -49,19 +41,30 @@ todo:
 
 [ ] error queue
 
-[ ] persistent store
-
 [ ] schema based queue
 
+[p] streaming of data 
+
+    - stream from file
+
+    - stream from memory
 [x] batch delivery
 
 [ ] secure queue access with external secure services
 
 [p] file-based authentication as default secure service
+    
+    dependencies: argon2, libsodium
+    
+    fedora / rhel: `sudo yum install libsodium -y`
 
-[ ] replay queue based on log
+    macos: `brew install libsodium`
 
 [ ] COMMIT command to persist store
+
+[ ] persistent store
+
+[ ] replay queue based on log
 
 [ ] monitoring
 
@@ -72,3 +75,4 @@ todo:
     running out of available thread when adding new topic. 
     after evaluation, current resolution is to limit the number of available topic
     running in the process. there is always a limitation for a low end hardware.
+    in this case, pubsub will be limited by the number of available thread.
