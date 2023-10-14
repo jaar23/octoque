@@ -1,4 +1,4 @@
-import server/[qserver, repl], store/qtopic
+import server/[qserver, repl, auth], store/qtopic
 import octolog, os, strutils, times, strformat
 import argparse, threadpool, cpuinfo
 
@@ -7,6 +7,7 @@ var serverOpts = newParser:
   command("run"):
     flag("-d", "--detach", help = "running in detached mode")
     flag("-i", "--interactive", help = "start server with interactive mode")
+    flag("-k", "--usefilelogger", help = "keep log to file, logfile is enabled by default")
     option("-a", "--address", default = some("0.0.0.0"),
         help = "server address")
     option("-p", "--port", default = some("6789"), help = "server port")
@@ -14,17 +15,17 @@ var serverOpts = newParser:
           help = "listener thread for queue with broker type")
     option("-c", "--configfile", help = "configuration file")
     option("-l", "--logfile", help = "log file name, you can define the file path here too")
-    option("-k", "--usefilelogger", default = some("y"),
-        help = "keep log to file, default yes when logfile enabled")
     option("-t", "--max-topic", default = some("8"),
         help = "maximum topic running on this queue server, default is 8")
   command("adm"):
     command("create"):
+      flag("-r", "--read-access", help = "grant read access to topic provided")
+      flag("-rw", "--read-write-access", help = "grant read write access to topic provided")
       option("-u", "--username", help = "username", required = true)
       option("-p", "--password", help = "user's password")
-      option("-t", "--topic", help = "topic that is authorized to access",
+      option("-t", "--topic", help = "topic(s) that is authorized to access",
           multiple = true)
-      option("-r", "--role", help = "user's role")
+      option("-r", "--role", default = some("user"), help = "user's role")
     command("update"):
       option("-u", "--username", help = "username", required = true)
       option("-p", "--password", help = "user's password")
@@ -46,17 +47,21 @@ proc main() =
   var opts = serverOpts.parse(args)
 
   if opts.adm.isSome:
+    octologStart("octoque.adm.log", skipInitLog=true)
     let adm = opts.adm.get
     if adm.create.isSome:
-      echo "create user"
+      createUser(adm.create.get.username, adm.create.get.password, adm.create.get.role_opt, adm.create.get.topic)
     elif adm.update.isSome:
       echo "update user"
     elif adm.remove.isSome:
       echo "remove user"
+    octologStop(true)
+    quit(0)
   elif opts.run.isSome:
     let run = opts.run.get
     var logfile = if run.logfile_opt.isSome: run.logfile else: now().format("yyyyMMddHHmm")
-    var usefilelogger = if run.usefilelogger == "n": false else: true
+    octologStart(filename = logfile, usefilelogger = run.usefilelogger,
+                 useconsolelogger=not run.interactive)
     ## 8 default
     ## 1 for main thread
     ## 1 for logging
@@ -71,8 +76,6 @@ proc main() =
       info &"threadpool size is {minPoolSize}, set to default 256"
       minPoolSize = 256
     setMinPoolSize(minPoolSize)
-    octologStart(filename = logfile, usefilelogger = usefilelogger,
-                 useconsolelogger=not run.interactive)
     info &"minimum threads in this startup: {minPoolSize}"
     info &"octoque is started {run.address}:{run.port}"
     if run.interactive:
@@ -93,7 +96,7 @@ when isMainModule:
     main()
   except ShortCircuit as err:
     if err.flag == "argparse_help":
-      echo err.help
+      stdout.writeLine err.help
       quit(1)
   except CatchableError:
     stderr.writeLine getCurrentExceptionMsg()

@@ -47,6 +47,7 @@ proc acqConn(serverAddr: string, serverPort: int, line: string): Socket =
     return conn
   elif resp.startsWith("DECLINE"):
     handleDecline(resp)
+    return nil
   else:
     return nil
 
@@ -56,6 +57,8 @@ proc readResult(conn: Socket, numberOfMsg: uint8) =
     var dataResp = conn.recvLine()
     if dataResp.startsWith("DECLINE"):
       handleDecline(dataResp)
+    elif dataResp.strip() == "ENDOFRESP":
+      break
     elif dataResp.strip().len > 0:
       stdoutResult "result  > "
       stdoutWrite dataResp
@@ -69,8 +72,9 @@ proc repl(serverAddr: string, serverPort: int): void =
   var conn: Socket
   var running = true
   var qheader: QHeader
+  var state = "command"
   while running:
-    if conn != nil:
+    if state != "command" and conn != nil:
       if qheader.command == PUT or qheader.command == PUTACK:
         for row in 0.uint8()..<qheader.payloadRows:
           stdoutData "data    > "
@@ -85,7 +89,8 @@ proc repl(serverAddr: string, serverPort: int): void =
         else:
           qheader.numberOfMsg = 6
       readResult(conn, qheader.numberOfMsg)
-      conn = nil
+      #conn = nil
+      state = "command"
     else:
       stdoutCmd "command > "
       headerLine = readLine(stdin)
@@ -104,15 +109,19 @@ proc repl(serverAddr: string, serverPort: int): void =
             else:
               stdoutResult "result  > "
               stdoutWrite resp
-          elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or
-          qheader.command == SUBSCRIBE:
+            state = "command"
+          elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE:
+          #qheader.command == SUBSCRIBE:
             stdoutResult "result  > "
             stdoutWrite "this command does not support in repl currently"
+            state = "command"
           else:
             conn = acqConn(serverAddr, serverPort, headerLine)
+            state = "result"
         except:
           stdoutError "error   > "
           stdoutWrite getCurrentExceptionMsg()
+          state = "command"
 
   echo "exit repl session"
   quit(0)

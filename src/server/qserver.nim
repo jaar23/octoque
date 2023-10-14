@@ -1,5 +1,5 @@
 import ../store/queue, ../store/qtopic
-import message, errcode
+import message, errcode, auth
 import net, options, strutils, strformat, threadpool
 import octolog
 
@@ -10,6 +10,7 @@ type
     port: int
     queue: ref Queue
     running: bool
+    authStore: Auth
 
   QueueResponse* = object
     status: string
@@ -26,6 +27,7 @@ proc newQueueServer*(address: string, port: int,
   var qserver = QueueServer(address: address, port: port)
   qserver.queue = newQueue(topicSize)
   qserver.running = true
+  qserver.authStore = getAuth()
   return qserver
 
 
@@ -36,22 +38,13 @@ proc initQueueServer*(address: string, port: int, topics: varargs[string],
   qserver.queue = queue
   qserver.queue.startListener(workerNumber)
   qserver.running = true
+  qserver.authStore = getAuth()
   return qserver
 
 
 proc addQueueTopic*(qserver: QueueServer, topicName: string,
     connType: ConnectionType = BROKER, capacity: int = 0): void =
   qserver.queue.addTopic(topicName, connType, capacity)
-
-
-# proc newQueueResponse*(status: string, code: int, message: string,
-#     data: string): QueueResponse =
-#   var queueResp = QueueResponse()
-#   queueResp.code = 0
-#   queueResp.status = "ok"
-#   queueResp.message = "push to subscriber"
-#   queueResp.data = data
-#   return queueResp
 
 
 proc procced(server: QueueServer, client: Socket): void =
@@ -62,13 +55,17 @@ proc decline(server: QueueServer, client: Socket, reason: string): void =
   client.send("DECLINE:" & reason & "\n")
 
 
-## TODO: authentication with external secure service
+proc endofresp(server: QueueServer, client: Socket): void =
+  client.send("ENDOFRESP\n")
+
+
+## TODO: authentication with file based authentication
 # proc connect(server: ref QueueServer, client: Socket, qheader: QHeader): void =
 #   var qclient = newQClient(client, getThreadId())
 #   server.qclients.add(qclient)
 #   qclient.send("CONNECTED " & qclient.connectionId)
 
-
+## TODO disconnect current connection
 # proc disconnect(server: var QueueServer): void =
 
 
@@ -139,57 +136,59 @@ proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =
 
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
   try:
-    let headerLine = client.recvLine()
-    info "incoming: " & headerLine
-    if headerLine.len != 0:
-      #parse header
-      let qheader = parseQHeader(headerLine)
-      debug "qheader: " & $qheader
-      if qheader.protocol != OTQ:
-        raise newException(ProcessError, $NOT_IMPLEMENTED)
-      if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
-          qheader.command != NEW:
-        raise newException(ProcessError, $TOPIC_NOT_FOUND)
-      case qheader.command:
-      of GET:
-        server.procced(client)
-        let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
-        server.response(client, msgSeq)
-      of PUT, PUTACK:
-        server.procced(client)
-        server.store(client, qheader)
-      of PUBLISH:
-        # haven't confirm the behavior of publish, leaving it an alias of PUT
-        server.procced(client)
-        server.store(client, qheader)
-      of SUBSCRIBE:
-        server.procced(client)
-        server.subscribe(client, qheader.topic)
-      of UNSUBSCRIBE:
-        server.unsubscribe(client, qheader.topic)
-      of PING:
-        server.ping(client)
-      of CLEAR:
-        server.procced(client)
-        server.clear(client, qheader)
-      of NEW:
-        server.procced(client)
-        server.newtopic(client, qheader.topic, qheader.topicSize,
-            qheader.connectionType)
-      of DISPLAY:
-        debug $qheader.topic & "!!!"
-        server.procced(client)
-        debug "call list topic"
-        server.listtopic(client, qheader)
-      of ACKNOWLEDGE:
-        server.procced(client)
-      # of CONNECT:
-        #   save a session in secure service
-        #   echo "not implemented"
-        #  server.connect(client, qheader)
-        # of DISCONNECT:
-        #   remove session from secure service
-        #   echo "not implemented"
+    while true:
+      let headerLine = client.recvLine()
+      info "incoming: " & headerLine
+      if headerLine.len != 0:
+        #parse header
+        let qheader = parseQHeader(headerLine)
+        debug "qheader: " & $qheader
+        if qheader.protocol != OTQ:
+          raise newException(ProcessError, $NOT_IMPLEMENTED)
+        if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
+            qheader.command != NEW:
+          raise newException(ProcessError, $TOPIC_NOT_FOUND)
+        case qheader.command:
+        of GET:
+          server.procced(client)
+          let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
+          server.response(client, msgSeq)
+        of PUT, PUTACK:
+          server.procced(client)
+          server.store(client, qheader)
+        of PUBLISH:
+          # haven't confirm the behavior of publish, leaving it an alias of PUT
+          server.procced(client)
+          server.store(client, qheader)
+        of SUBSCRIBE:
+          server.procced(client)
+          server.subscribe(client, qheader.topic)
+        of UNSUBSCRIBE:
+          server.unsubscribe(client, qheader.topic)
+        of PING:
+          server.ping(client)
+        of CLEAR:
+          server.procced(client)
+          server.clear(client, qheader)
+        of NEW:
+          server.procced(client)
+          server.newtopic(client, qheader.topic, qheader.topicSize,
+              qheader.connectionType)
+        of DISPLAY:
+          debug $qheader.topic & "!!!"
+          server.procced(client)
+          debug "call list topic"
+          server.listtopic(client, qheader)
+        of ACKNOWLEDGE:
+          server.procced(client)
+        # of CONNECT:
+          #   save a session in secure service
+          #   echo "not implemented"
+          #  server.connect(client, qheader)
+          # of DISCONNECT:
+          #   remove session from secure service
+          #   echo "not implemented"
+      server.endofresp(client)
   except:
     let errMsg = getCurrentExceptionMsg()
     server.decline(client, errMsg)
