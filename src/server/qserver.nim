@@ -105,6 +105,7 @@ proc clear(server: QueueServer, client: Socket, qheader: QHeader): void =
 
 
 proc subscribe(server: QueueServer, client: Socket, topicName: string): void =
+  debug $getThreadId() & "into subscribe"
   server.queue.subscribe(topicName, client)
 
 
@@ -168,6 +169,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           server.store(client, qheader)
         of SUBSCRIBE:
           server.procced(client)
+          debug "proceed subscribe"
           server.subscribe(client, qheader.topic)
         of UNSUBSCRIBE:
           server.unsubscribe(client, qheader.topic)

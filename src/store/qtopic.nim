@@ -110,7 +110,7 @@ proc publish*(qtopic: ref QTopic, data: string): void =
       for s in qtopic.subscriptions.filter(s => not s.isDisconnected()):
         #let pong = s.ping()
         #if pong:
-        discard s.trySend(&"{data}\r\n")
+        discard s.trySend(&"{data}\n")
         #else:
         #  s.close()
     except:
@@ -184,15 +184,21 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 
   try:
     spawn qsubs.run()
+    #discard qsubs.ping()
+    sleep(1000)
     while true:
-      if not qsubs.ping():
-        break
+      # let pong = qsubs.ping()
+      # if not pong:
+      #   break
       var recvData = ""
+      debug "1"
       withLock storeLock:
         if qtopic.store.len == 0:
+          debug "2"
           sleep(1000)
         else:
           recvData = qtopic.store.popFirst()
+      debug "recvData is " & recvData
       if recvData == "":
         sleep(1000)
       else:
@@ -239,10 +245,10 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
 
 
 proc `$`*(qtopic: ref QTopic): string =
-  result = "-----------------------------------------------------\n"
+  result = "+----------------------------------------------------\n"
   result &= "| Name              : " & qtopic.name & "\n"
   result &= "| Connection Type   : " & $qtopic.connectionType & "\n"
   result &= "| Capacity          : " & $qtopic.capacity & "\n"
   result &= "| Store Size        : " & $qtopic.size() & "\n"
-  result &= "-----------------------------------------------------\n"
+  result &= "+----------------------------------------------------\n"
 

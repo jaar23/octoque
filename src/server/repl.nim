@@ -14,11 +14,11 @@ import threadpool, net, strutils, terminal, message
 var connected = false
 const version = "v0.1.0"
 const replMessage = """
-     ooo    ccc  ttttt   ooo    qqq    u   u  eeeee
-    o   o  c       t    o   o  q   q   u   u  e
-    o   o  c       t    o   o  q   q   u   u  eeeee
-    o   o  c       t    o   o  q  qq   u   u  e
-     ooo    ccc    t     ooo    qqq q   uuu   eeeee
+    ooo    ccc  ttttt   ooo    qqq    u   u  eeeee
+   o   o  c       t    o   o  q   q   u   u  e
+   o   o  c       t    o   o  q   q   u   u  eeeee
+   o   o  c       t    o   o  q  qq   u   u  e
+    ooo    ccc    t     ooo    qqq q   uuu   eeeee
 """
 const lastUpdated = "17 October 2023"
 var commandHistory {.threadvar.}: seq[string]
@@ -59,6 +59,7 @@ template stdoutWrite (msg: string) =
   stdout.writeLine msg
 
 
+
 proc handleResult(resp: string) =
   stdoutResult "result  > "
   stdoutWrite resp
@@ -77,7 +78,27 @@ proc handleQuit() =
   quit(0)
 
 
-proc handleHelp() = 
+proc handleSubscribe(conn: var Socket) =
+  proc handleCtrlC() {.noconv.} =
+    handleQuit()
+    quit(0)
+  setControlCHook(handleCtrlC)
+  stdoutInfo "ctrl+c to exit subscribe\n"
+  while true and conn != nil:
+    #echo "sub recv"
+    #echo "b unsubscribe?" & $unsubscribe
+    let recvData = conn.recvLine()
+    #echo "sub send"
+    if recvData.strip().len > 0:
+      #echo "sub have data"
+      handleResult(recvData)
+    else:
+      conn.send("REPLPONG\n")
+    #echo "unsubscribe?" & $unsubscribe
+  unsetControlCHook()
+
+
+proc handleHelp() =
   stdoutResult "Exmple command\n"
   echo ""
   stdoutResult "CONNECT\n"
@@ -107,6 +128,7 @@ proc handleHelp() =
   stdoutWrite "'otq clear default', clear all message inside default topic"
   echo ""
 
+
 proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
   stdoutCmd "command > "
   var connLine = readLine(stdin)
@@ -128,6 +150,7 @@ proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
     handleDecline(resp)
     connected = false
     return false
+
 
 proc prepareSend(conn: Socket, line: string): bool =
   conn.send(line & "\n")
@@ -157,20 +180,22 @@ proc sendCommand(conn: Socket, qheader: var QHeader): bool {.raises: CatchableEr
     handleHelp()
     return false
   qheader = parseQHeader(commandLine)
-  if qheader.command == PING:
-    conn.send(commandLine & "\n")
-    var resp = conn.recvLine()
-    if resp.startsWith("DECLINE"):
-      handleDecline(resp)
-    else:
-      handleResult(resp)
-  elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or
-  qheader.command == SUBSCRIBE:
+  # if qheader.command == PING:
+  #   conn.send(commandLine & "\n")
+  #   var resp = conn.recvLine()
+  #   if resp.startsWith("DECLINE"):
+  #     handleDecline(resp)
+  #   else:
+  #     handleResult(resp)
+  if qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE:
+  #qheader.command == SUBSCRIBE:
     handleResult("this command does not support in repl currently")
+  # elif qheader.command == SUBSCRIBE:
+  #   handleSubscribe(conn)
   else:
     return prepareSend(conn, commandLine)
 
-  
+
 proc readResult(conn: Socket, numberOfMsg: uint8 = 1) =
   while true:
     var dataResp = conn.recvLine()
@@ -180,16 +205,18 @@ proc readResult(conn: Socket, numberOfMsg: uint8 = 1) =
       break
     elif dataResp.strip() == "PROCEED":
       continue
+    elif dataResp.strip() == "PONG":
+      handleResult(dataResp)
     elif dataResp.strip().len > 0:
       handleResult(dataResp)
 
 
 proc replExecutor(serverAddr: string, serverPort: int): void =
-  stdoutResult "-----------------------------------------------------\n" 
+  stdoutResult "-----------------------------------------------------\n"
   stdoutResult replMessage
-  stdoutResult "-----------------------------------------------------\n" 
+  stdoutResult "-----------------------------------------------------\n"
   echo version & ", " & lastUpdated
-  stdoutData "octoque is running on " & hostOS 
+  stdoutData "octoque is running on " & hostOS
   stdoutInfo " (" & serverAddr & ":" & $serverPort & ")\n"
   echo ""
   echo "Welcome to octoque REPL. Type 'help' for list of "
@@ -197,6 +224,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
   echo "has sent out."
   echo "Type quit or Ctrl-C to exit octoque."
   echo ""
+
   var conn: Socket = nil
   var qheader: QHeader
   var state = "command"
@@ -205,9 +233,11 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
   while true:
     try:
       if conn == nil and connected == false:
-        discard acqConn(conn, serverAddr, serverPort)
-      else: 
+        let acq = acqConn(conn, serverAddr, serverPort)
+        if not acq: conn = nil
+      else:
         if state == "command":
+          qheader = new(QHeader)[]
           proceed = sendCommand(conn, qheader)
           if not proceed:
             continue
@@ -220,6 +250,8 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
               if dataLine.toLowerAscii() == "quit":
                 break
               conn.send(dataLine & "\n")
+          elif qheader.command == SUBSCRIBE:
+            handleSubscribe(conn)
           readResult(conn, qheader.numberOfMsg)
           state = "command"
         else:
@@ -228,8 +260,8 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
           #handleDecline("DECLINE:unknown state")
     except:
       handleDecline("DECLINE:" & getCurrentExceptionMsg())
-  handleQuit() 
-        
+  handleQuit()
+
 # proc repl(serverAddr: string, serverPort: int): void =
 #   echo "start repl session"
 #   var headerLine: string
@@ -304,4 +336,4 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
 #   quit(0)
 
 proc replStart*(address: string, port: int) =
-  spawn replExecutor(address, port)
+  replExecutor(address, port)

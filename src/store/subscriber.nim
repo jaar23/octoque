@@ -38,20 +38,21 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
   if subscriber.disconnected:
     return false
   else:
-    let sent = subscriber.connection.trySend(data)
+    debug "sending data >>>>" & data
+    let sent = subscriber.connection.trySend(data & "\n")
     if not sent:
       subscriber.disconnected = true
     return sent
 
 
 proc publish*(subscriber: ref Subscriber): void =
-  if subscriber.channel.peek() > 0:
-    let recvData = subscriber.channel.recv()
-    let sent: bool = subscriber.trySend(recvData)
-    if not sent:
-      debug &"{subscriber.runnerId()} failed to send message"
-  else:
-    return
+  #if subscriber.channel.peek() > 0:
+  let recvData = subscriber.channel.recv()
+  let sent: bool = subscriber.trySend(recvData)
+  if not sent:
+    debug &"{subscriber.runnerId()} failed to send message"
+  #else:
+  #  return
 
 
 proc close*(subscriber: ref Subscriber): void =
@@ -64,12 +65,12 @@ proc close*(subscriber: ref Subscriber): void =
 
 
 proc ping*(subscriber: ref Subscriber): bool =
-  # debug &"{subscriber.runnerId()} ping subscriber"
-  # defer:
-  #   if result:
-  #     debug &"{subscriber.runnerId()} ping successfully"
-  #   else:
-  #     debug &"{subscriber.runnerId()} ping failed"
+  debug &"{subscriber.runnerId()} ping subscriber"
+  defer:
+    if result:
+      debug &"{subscriber.runnerId()} ping successfully"
+    else:
+      debug &"{subscriber.runnerId()} ping failed"
 
   let sent = subscriber.connection.trySend("\n")
   if not sent:
@@ -105,9 +106,9 @@ proc run*(subscriber: ref Subscriber) {.thread.} =
   try:
     while not subscriber.disconnected:
       if not subscriber.isDisconnected():
-        let pong = subscriber.ping()
-        if not pong:
-          break
+        # let pong = subscriber.ping()
+        # if not pong:
+        #   break
         subscriber.publish()
       else:
         echo $subscriber

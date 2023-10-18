@@ -7,6 +7,8 @@ todo:
 
 [x] multiple subcriber (push and broadcast based)
 
+[ ] subcribe to multiple topic
+
 [x] logging for common and pubsub channel
 
 [x] standardize response

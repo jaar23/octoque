@@ -17,6 +17,10 @@ var serverOpts = newParser:
     option("-l", "--logfile", help = "log file name, you can define the file path here too")
     option("-t", "--max-topic", default = some("8"),
         help = "maximum topic running on this queue server, default is 8")
+  command("repl"):
+    option("-a", "--address", default = some("0.0.0.0"),
+        help = "server address")
+    option("-p", "--port", default = some("6789"), help = "server port")
   command("adm"):
     command("create"):
       flag("-r", "--read-access", help = "grant read access to topic provided")
@@ -78,16 +82,19 @@ proc main() =
     setMinPoolSize(minPoolSize)
     info &"minimum threads in this startup: {minPoolSize}"
     info &"octoque is started {run.address}:{run.port}"
-    if run.interactive:
-      replStart(run.address, run.port.parseInt())
+    # if run.interactive:
+    #   replStart(run.address, run.port.parseInt())
     let server = newQueueServer(run.address, run.port.parseInt(),
         run.max_topic.parseInt().uint8())
     server.addQueueTopic("default", BROKER)
-    #server.addQueueTopic("pubsub", PUBSUB)
+    server.addQueueTopic("pubsub", PUBSUB)
     var numOfThread = run.brokerthread.parseInt()
     server.start(numOfThread)
     info &"octoque is terminated"
     octologStop()
+  elif opts.repl.isSome():
+    while true:
+      replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
 
 
 
