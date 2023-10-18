@@ -10,3 +10,5 @@ type
     INVALID_CONTENT_LENGTH = "Invalid content length, positive number only"
     EXCEED_ALLOWED_TOPIC = "Exceed the number of allowed queue topic defined"
     TOPIC_EXISTED = "Topic is already existed"
+    MISSING_PARAMETER = "Missing paramters"
+    UNAUTHORIZED_ACCESS = "Unauthorized access"

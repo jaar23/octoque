@@ -4,7 +4,7 @@
 ## [PROTOCOL][KEEP ALIVE][LENGTH][STREAM/BATCH]
 ## [COMMAND][TOPIC]
 ## [PAYLOAD]
-import strutils
+import strutils, errcode
 from ../store/qtopic import ConnectionType
 
 type
@@ -19,7 +19,7 @@ type
     CLEAR = "CLEAR"
     NEW = "NEW"
     DISPLAY = "DISPLAY"
-    #CONNECT     = "CONNECT"
+    CONNECT     = "CONNECT"
     #DISCONNECT  = "DISCONNECT"
     ACKNOWLEDGE = "ACKNOWLEDGE"
 
@@ -31,6 +31,7 @@ type
     STREAM,
     BATCH
 
+  ## not the best design, changes is required here
   QHeader* = object
     protocol*: Protocol
     transferMethod*: TransferMethod = BATCH
@@ -42,6 +43,8 @@ type
     connectionType*: ConnectionType = BROKER
     lifespan*: int = 0
     numberofThread: uint = 2
+    username*: string
+    password*: string
     #length*: uint32
     # keepAlive*: uint32
 
@@ -69,8 +72,8 @@ proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
     result = CLEAR
   of "DISPLAY":
     result = DISPLAY
-  #of "CONNECT":
-  #  result = CONNECT
+  of "CONNECT":
+    result = CONNECT
   #of "DISCONNECT":
   #  result = DISCONNECT
   of "NEW":
@@ -142,6 +145,14 @@ proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
       result.topicSize = lineArr[4].parseInt()
     if lineArr.len > 5:
       result.numberofThread = lineArr[5].parseInt().uint()
+
+  if result.command == CONNECT:
+    if lineArr.len < 3:
+      raise newException(ParseError, $MISSING_PARAMETER & ", username or password")
+    result.username = lineArr[2]
+    result.password = lineArr[3]
+
+
   # long running connection required keep alive
   # TODO: evaluate if long running connection is required
   # result.keepAlive = lineArr[3].parseInt().uint32()

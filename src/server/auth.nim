@@ -3,20 +3,20 @@ import nimword, options, os, octolog, yaml, streams, sequtils, sugar
 type
   AccessMode* = enum
     TRead = "r", TWrite = "w", TReadWrite = "rw"
-  Topic = object
-    name: string
-    access: string
-  Role = object
-    name: string
-    topics: seq[Topic]
-  User = object
-    username: string
-    passwordHash: string
-    role: string
-    topics: seq[Topic]
+  Topic* = object
+    name*: string
+    access*: string
+  Role* = object
+    name*: string
+    topics*: seq[Topic]
+  User* = object
+    username*: string
+    passwordHash*: string
+    role*: string
+    topics*: seq[Topic]
   Auth* = object
-    roles: seq[Role]
-    users: seq[User]
+    roles*: seq[Role]
+    users*: seq[User]
 
   AuthFileError = object of CatchableError
   AuthError = object of CatchableError
@@ -81,7 +81,8 @@ proc saveAuth(auth: Auth): void {.raises: AuthFileError.} =
     raise newException(AuthFileError, getCurrentExceptionMsg())
 
 
-#proc validateLogin*(username: string, password: string): bool
+proc verifyPassowrd*(password: string, passwordHash: string): bool =
+  isValidPassword(password, passwordHash)
 
 
 proc createUser*(username: string, password: string, role: Option[string],
