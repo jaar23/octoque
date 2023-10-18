@@ -65,12 +65,12 @@ proc close*(subscriber: ref Subscriber): void =
 
 
 proc ping*(subscriber: ref Subscriber): bool =
-  debug &"{subscriber.runnerId()} ping subscriber"
-  defer:
-    if result:
-      debug &"{subscriber.runnerId()} ping successfully"
-    else:
-      debug &"{subscriber.runnerId()} ping failed"
+  # debug &"{subscriber.runnerId()} ping subscriber"
+  # defer:
+  #   if result:
+  #     debug &"{subscriber.runnerId()} ping successfully"
+  #   else:
+  #     debug &"{subscriber.runnerId()} ping failed"
 
   let sent = subscriber.connection.trySend("\n")
   if not sent:

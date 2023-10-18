@@ -187,14 +187,12 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     #discard qsubs.ping()
     sleep(1000)
     while true:
-      # let pong = qsubs.ping()
-      # if not pong:
-      #   break
+      let pong = qsubs.ping()
+      if not pong:
+        break
       var recvData = ""
-      debug "1"
       withLock storeLock:
         if qtopic.store.len == 0:
-          debug "2"
           sleep(1000)
         else:
           recvData = qtopic.store.popFirst()

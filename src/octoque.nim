@@ -93,8 +93,7 @@ proc main() =
     info &"octoque is terminated"
     octologStop()
   elif opts.repl.isSome():
-    while true:
-      replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
+    replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
 
 
 
