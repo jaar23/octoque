@@ -8,7 +8,7 @@
 ##
 ## ===============================================
 
-import threadpool, net, strutils, terminal, message
+import net, strutils, terminal, message
 
 
 var connected = false
@@ -59,7 +59,6 @@ template stdoutWrite (msg: string) =
   stdout.writeLine msg
 
 
-
 proc handleResult(resp: string) =
   stdoutResult "result  > "
   stdoutWrite resp
@@ -72,7 +71,7 @@ proc handleDecline(resp: string) =
 
 
 proc handleQuit() =
-  stdoutResult "exit repl mode, bye \n"
+  stdoutResult "\nexit repl mode, bye \n"
   stdoutWrite ""
   connected = false
   quit(0)
@@ -88,10 +87,13 @@ proc handleSubscribe(conn: var Socket) =
     #echo "sub recv"
     #echo "b unsubscribe?" & $unsubscribe
     let recvData = conn.recvLine()
-    #echo "sub send"
+    echo "sub send"
     if recvData.strip().len > 0:
-      #echo "sub have data"
-      handleResult(recvData)
+      echo "sub have data"
+      if recvData.strip().startsWith("DECLINE"):
+        handleDecline(recvData)
+      else:
+        handleResult(recvData)
     else:
       conn.send("REPLPONG\n")
     #echo "unsubscribe?" & $unsubscribe

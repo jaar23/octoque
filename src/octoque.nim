@@ -6,8 +6,8 @@ import argparse, threadpool, cpuinfo
 var serverOpts = newParser:
   command("run"):
     flag("-d", "--detach", help = "running in detached mode")
-    flag("-i", "--interactive", help = "start server with interactive mode")
-    flag("-k", "--usefilelogger", help = "keep log to file, logfile is enabled by default")
+    flag("-nc", "--noconsolelogger", help = "start server without logging to console")
+    flag("-nf", "--nofilelogger", help = "start server without logging to file")
     option("-a", "--address", default = some("0.0.0.0"),
         help = "server address")
     option("-p", "--port", default = some("6789"), help = "server port")
@@ -23,14 +23,14 @@ var serverOpts = newParser:
     option("-p", "--port", default = some("6789"), help = "server port")
   command("adm"):
     command("create"):
-      flag("-r", "--read-access", help = "grant read access to topic provided")
-      flag("-rw", "--read-write-access", help = "grant read write access to topic provided")
       option("-u", "--username", help = "username", required = true)
       option("-p", "--password", help = "user's password")
       option("-t", "--topic", help = "topic(s) that is authorized to access",
           multiple = true)
       option("-r", "--role", default = some("user"), help = "user's role")
     command("update"):
+      flag("-a", "--append", help = "append to user attributes")
+      flag("-f", "--replace", help = "replace to user attributes")
       option("-u", "--username", help = "username", required = true)
       option("-p", "--password", help = "user's password")
       option("-t", "--topic", help = "topic that is authorized to access",
@@ -44,6 +44,15 @@ var serverOpts = newParser:
   help("{prog} is a simple queue system with broker and pubsub implementation.\n")
 
 
+proc graceExit() {.noconv.} =
+  # sync()
+  # stop all subscriber
+  # stop all topic
+  # stop queue manager
+  # join all threads
+  echo "\noctoque is terminated\n"
+  quit(0)
+
 
 ## TODO: init from config file
 proc main() =
@@ -51,21 +60,26 @@ proc main() =
   var opts = serverOpts.parse(args)
 
   if opts.adm.isSome:
-    octologStart("octoque.adm.log", skipInitLog=true)
+    octologStart("octoque.adm.log", skipInitLog = true, fmt="")
     let adm = opts.adm.get
     if adm.create.isSome:
-      createUser(adm.create.get.username, adm.create.get.password, adm.create.get.role_opt, adm.create.get.topic)
+      var cru = adm.create.get
+      createUser(cru.username, cru.password, cru.role_opt, cru.topic)
     elif adm.update.isSome:
-      echo "update user"
+      var updateMode = if adm.update.get.append: Append else: Replace
+      var upd = adm.update.get
+      updateUser(upd.username, upd.password_opt, upd.role_opt, upd.topic, updateMode)
     elif adm.remove.isSome:
-      echo "remove user"
+      var rmu = adm.remove.get
+      removeUser(rmu.username, rmu.topic)
     octologStop(true)
     quit(0)
   elif opts.run.isSome:
+    setControlCHook(graceExit)
     let run = opts.run.get
     var logfile = if run.logfile_opt.isSome: run.logfile else: now().format("yyyyMMddHHmm")
-    octologStart(filename = logfile, usefilelogger = run.usefilelogger,
-                 useconsolelogger=not run.interactive)
+    octologStart(filename = logfile, usefilelogger = not run.nofilelogger,
+                 useconsolelogger = not run.noconsolelogger)
     ## 8 default
     ## 1 for main thread
     ## 1 for logging
@@ -90,7 +104,6 @@ proc main() =
     server.addQueueTopic("pubsub", PUBSUB)
     var numOfThread = run.brokerthread.parseInt()
     server.start(numOfThread)
-    info &"octoque is terminated"
     octologStop()
   elif opts.repl.isSome():
     replStart(opts.repl.get.address, opts.repl.get.port.parseInt())

@@ -133,7 +133,7 @@ proc startTopicListener*(queue: ref Queue, topicName: string,
 
 
 proc subscribe*(queue: ref Queue, topicName: string,
-    connection: Socket): void =
+    connection: Socket): void {.raises: CatchableError.} =
   defer:
     info "synchronizing remaining threads"
     sync()
@@ -146,6 +146,7 @@ proc subscribe*(queue: ref Queue, topicName: string,
     if topic.isSome:
       if topic.get.connectionType != PUBSUB:
         error(&"{topicName} is not subscribable")
+        raise newException(CatchableError, &"{topicName} is not subscribable")
       else:
         info($subscriber)
         topic.get.subscribe(subscriber)
@@ -153,8 +154,9 @@ proc subscribe*(queue: ref Queue, topicName: string,
         subscriber.close()
     else:
       info(&"{topicName} not found")
+      raise newException(CatchableError, &"{topicName} not found")
   except:
-    error(getCurrentExceptionMsg())
+    raise newException(CatchableError, getCurrentExceptionMsg())
   finally:
     if topic.isSome:
       info(&"{getThreadId()} exit thread")

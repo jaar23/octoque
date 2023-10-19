@@ -1,8 +1,16 @@
-import nimword, options, os, octolog, yaml, streams, sequtils, sugar
+import nimword, options, os, octolog, yaml, streams, sequtils, 
+       sugar, std/enumerate, terminal, strutils
 
 type
   AccessMode* = enum
-    TRead = "r", TWrite = "w", TReadWrite = "rw"
+    TRead = "r",
+    TWrite = "w",
+    TNew = "n",
+    TClear = "c",
+    TReadWrite = "rw",
+    TAll = "rwnc"
+  UpdateMode* = enum
+    Append, Replace
   Topic* = object
     name*: string
     access*: string
@@ -13,7 +21,7 @@ type
     username*: string
     passwordHash*: string
     role*: string
-    topics*: seq[Topic]
+    topics*: seq[string]
   Auth* = object
     roles*: seq[Role]
     users*: seq[User]
@@ -21,19 +29,27 @@ type
   AuthFileError = object of CatchableError
   AuthError = object of CatchableError
 
+const argon2Iteration = 3
+
+template stdoutWarning (msg: string) =
+  stdout.setForegroundColor(fgMagenta)
+  stdout.write msg
+  stdout.resetAttributes()
+
+
 proc initAuthFile(): void {.raises: AuthFileError.} =
   try:
     let
       authDir = getHomeDir() & "/.config/octoque/"
       authFile = "auth.yaml"
-      defaultTopicRead = Topic(name: "default", access: $TRead)
       defaultTopicReadWrite = Topic(name: "default", access: $TReadWrite)
-      adminRole = Role(name: "admin", topics: @[defaultTopicReadWrite])
-      userRole = Role(name: "user", topics: @[defaultTopicRead])
+      defaultTopicAllAccess = Topic(name: "default", access: $TAll)
+      adminRole = Role(name: "admin", topics: @[defaultTopicAllAccess])
+      userRole = Role(name: "user", topics: @[defaultTopicReadWrite])
       iterations: int = 3
       encodedHash: string = hashEncodePassword("password", iterations)
       adminUser = User(username: "admin", passwordHash: encodedHash,
-          role: "admin", topics: @[defaultTopicReadWrite])
+          role: "admin", topics: @["default"])
       auth = Auth(roles: @[adminRole, userRole], users: @[adminUser])
     ## create if config folder is not exist
     discard existsOrCreateDir(authDir)
@@ -81,31 +97,49 @@ proc saveAuth(auth: Auth): void {.raises: AuthFileError.} =
     raise newException(AuthFileError, getCurrentExceptionMsg())
 
 
+proc printUserInfo(user: User, updatedPassword = false): void =
+  octolog.info "username: " & user.username
+  octolog.info "password: " & (if updatedPassword: "updated" else: "not updated")
+  octolog.info "role    : " & user.role
+  octolog.info "topics  : " & $user.topics
+
+
 proc verifyPassowrd*(password: string, passwordHash: string): bool =
   isValidPassword(password, passwordHash)
 
 
-proc createUser*(username: string, password: string, role: Option[string],
+proc findUser(auth: Auth, username: string): (int, Option[User]) =
+  var user: User
+  var found = false
+  var index = -1
+  for u in auth.users:
+    index = index + 1
+    if u.username == username:
+      user = u
+      found = true
+      break
+  return if found: (index, some(user)) else: (-1, none(User))
+
+
+proc createUser*(username, password: string, role: Option[string],
     topics: seq[string]): void {.raises: [AuthError, AuthFileError].} =
   try:
     var auth = getAuth()
     let userRole = if role.isSome: role.get else: "user"
-    echo auth
-    echo topics
     if auth.users.filter(u => u.username == username).len > 0:
       raise newException(AuthError, "user is already existed")
     if auth.roles.filter(r => r.name == userRole).len > 0:
-      let iterations: int = 3
-      let encodedHash: string = hashEncodePassword(password, iterations)
+      let encodedHash: string = hashEncodePassword(password, argon2Iteration)
       var user = User(username: username, passwordHash: encodedHash,
           role: userRole)
       if topics.len > 0:
-        for t in topics:
-          var topic = Topic(name: t, access: $TRead & $TWrite)
+        for topic in topics:
           user.topics.add(topic)
 
       auth.users.add(user)
+      printUserInfo(user)
       saveAuth(auth)
+      stdoutWarning "Changes will take effect after octoque restart\n"
     else:
       octolog.error("role is not exists")
       raise newException(AuthError, "role is not exist")
@@ -117,9 +151,81 @@ proc createUser*(username: string, password: string, role: Option[string],
     raise newException(AuthError, getCurrentExceptionMsg())
 
 
+proc updateUser*(username: string, password, role: Option[string], topics: seq[
+    string], updateMode: UpdateMode = Append): void {.raises: [AuthError,
+    AuthFileError].} =
+  try:
+    var auth = getAuth()
+    var roleToUpdate = ""
+    var (index, user) = findUser(auth, username)
+    if user.isNone:
+      raise newException(AuthError, "user is not found")
+    if role.isSome and auth.roles.filter(r => r.name == role.get).len > 0:
+      roleToUpdate = role.get
+    if updateMode == Append:
+      if topics.len > 0:
+        for t in topics:
+          if not user.get.topics.contains(t):
+            user.get.topics.add(t)
+    elif updateMode == Replace:
+      if password.isSome:
+        let encodedHash: string = hashEncodePassword(password.get, argon2Iteration)
+        user.get.passwordHash = encodedHash
+      if role.isSome:
+        user.get.role = roleToUpdate
+      if topics.len > 0:
+        user.get.topics = topics
+    else:
+      raise newException(CatchableError, "Unknown update mode passed in. This should not happen")
+    
+    auth.users.delete(index)
+    auth.users.add(user.get)
+    printUserInfo(user.get, password.isSome)
+    stdoutWarning "Changes will take effect after octoque restart"
+    saveAuth(auth)
+  except AuthFileError as aferr:
+    raise newException(AuthFileError, aferr.msg)
+  except AuthError as aerr:
+    raise newException(AuthError, aerr.msg)
+  except:
+    raise newException(AuthError, getCurrentExceptionMsg())
 
 
-#proc updateUser*(username: string, password: Option[string], role: Option[string], topic: varargs)
+proc removeUser*(username: string, topics: seq[string]): void {.raises: [AuthError,
+    AuthFileError].} =
+  try:
+    var auth = getAuth()
+    var (index, user) = findUser(auth, username)
+    if user.isNone:
+      raise newException(AuthError, "user is not found")
+    if topics.len > 0:
+      for i, t in enumerate(topics):
+        if user.get.topics.contains(t):
+          user.get.topics.delete(i)
+          octolog.info "'" & t & "' has been removed from user's accessible topic"
+      saveAuth(auth)
+      stdoutWarning "Changes will take effect after octoque restart\n"
+    else:
+      echo "Please confirm you want to remove this user? (y/n)"
+      var confirmation = readLine(stdin)
+      if confirmation.toLowerAscii() == "y" or confirmation.toLowerAscii() == "yes":
+        echo "Please enter admin password: "
+        let adminPassword = readPasswordFromStdin()
+        let encodedPasswordHash = auth.users.filter(u => u.username == "admin")[0].passwordHash
+        if isValidPassword(adminPassword, encodedPasswordHash):   
+          auth.users.delete(index)
+          octolog.info "user has been removed"
+          saveAuth(auth)
+          stdoutWarning "Changes will take effect after octoque restart\n"
+      else: octolog.info "operation cancelled"
 
-#proc removeUser*(username: string, password: Option[string], role: Option[string], topic: varargs)
+  except AuthFileError as aferr:
+    raise newException(AuthFileError, aferr.msg)
+  except AuthError as aerr:
+    raise newException(AuthError, aerr.msg)
+  except:
+    raise newException(AuthError, getCurrentExceptionMsg())
+
+
+
 
