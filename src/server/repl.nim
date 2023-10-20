@@ -87,9 +87,9 @@ proc handleSubscribe(conn: var Socket) =
     #echo "sub recv"
     #echo "b unsubscribe?" & $unsubscribe
     let recvData = conn.recvLine()
-    echo "sub send"
+    #echo "sub send"
     if recvData.strip().len > 0:
-      echo "sub have data"
+      #echo "sub have data"
       if recvData.strip().startsWith("DECLINE"):
         handleDecline(recvData)
       else:
@@ -164,6 +164,9 @@ proc prepareSend(conn: Socket, line: string): bool =
   elif resp.startsWith("DECLINE"):
     handleDecline(resp)
     return false
+  elif resp.strip() == "PONG":
+    handleResult(resp)
+    return true
   else:
     return true
 
@@ -171,6 +174,8 @@ proc prepareSend(conn: Socket, line: string): bool =
 proc sendCommand(conn: Socket, qheader: var QHeader): bool {.raises: CatchableError.} =
   stdoutCmd "command > "
   var commandLine = readLine(stdin)
+  if commandLine.len == 0:
+    return
   commandHistory.add(commandLine)
   if commandLine.toLowerAscii() == "quit":
     handleQuit()
@@ -187,30 +192,31 @@ proc sendCommand(conn: Socket, qheader: var QHeader): bool {.raises: CatchableEr
   #   var resp = conn.recvLine()
   #   if resp.startsWith("DECLINE"):
   #     handleDecline(resp)
+  #     return false
   #   else:
   #     handleResult(resp)
-  if qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE:
-  #qheader.command == SUBSCRIBE:
-    handleResult("this command does not support in repl currently")
-  # elif qheader.command == SUBSCRIBE:
-  #   handleSubscribe(conn)
+  #     return true
+  if qheader.command == UNSUBSCRIBE:
+    handleResult("this command does not support in repl mode")
+    return false
   else:
     return prepareSend(conn, commandLine)
 
 
-proc readResult(conn: Socket, numberOfMsg: uint8 = 1) =
+proc readResult(conn: Socket) =
   while true:
     var dataResp = conn.recvLine()
-    if dataResp.startsWith("DECLINE"):
-      handleDecline(dataResp)
-    elif dataResp.endsWith("ENDOFRESP"):
-      break
-    elif dataResp.strip() == "PROCEED":
-      continue
-    elif dataResp.strip() == "PONG":
-      handleResult(dataResp)
-    elif dataResp.strip().len > 0:
-      handleResult(dataResp)
+    if dataResp.strip() != "":
+      if dataResp.startsWith("DECLINE"):
+        handleDecline(dataResp)
+      elif dataResp.strip().endsWith("ENDOFRESP"):
+        break
+      elif dataResp.strip() == "PROCEED":
+        continue
+      elif dataResp.strip() == "PONG":
+        handleResult(dataResp)
+      else:
+        handleResult(dataResp)
 
 
 proc replExecutor(serverAddr: string, serverPort: int): void =
@@ -245,7 +251,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
             continue
           state = "result"
         elif state == "result":
-          if qheader.command == PUT or qheader.command == PUTACK:
+          if qheader.command == PUT or qheader.command == PUTACK or qheader.command == PUBLISH:
             for row in 0.uint8()..<qheader.payloadRows:
               stdoutData "data    > "
               var dataLine = readLine(stdin)
@@ -254,7 +260,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
               conn.send(dataLine & "\n")
           elif qheader.command == SUBSCRIBE:
             handleSubscribe(conn)
-          readResult(conn, qheader.numberOfMsg)
+          readResult(conn)
           state = "command"
         else:
           stdoutError "error   > "

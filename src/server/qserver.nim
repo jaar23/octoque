@@ -47,7 +47,27 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
   qserver.queue.addTopic(topicName, connType, capacity)
 
 
-proc procced(server: QueueServer, client: Socket, message = "PROCEED"): void =
+## check if user has access to topic
+## check if user has correct role to access (rwnc)
+## check queue state before PROCEED
+## check qtopic state before proceed
+proc proceedCheck(server: QueueServer, username, role, topic: string, accessMode: AccessMode): bool =
+  # if role == "admin" and topic == "*":
+  #   info "authorized access *"
+  #   return true
+  # if role == "admin" and accessMode == TNew:
+  #   info "authorized to create new topic"
+  #   return true
+  if server.authStore.userHasAccess(username, topic):
+    info "authorized access"
+    return true
+  if server.authStore.roleHasAccess(role, topic, accessMode):
+    info "authorized access"
+    return true
+  return false
+
+
+proc proceed(server: QueueServer, client: Socket, message = "PROCEED"): void =
   client.send(message & "\n")
 
 
@@ -60,12 +80,12 @@ proc endofresp(server: QueueServer, client: Socket): void =
 
 
 ## TODO: authentication with file based authentication
-proc connect(server: QueueServer, client: Socket, qheader: QHeader): bool =
+proc connect(server: QueueServer, client: Socket, qheader: QHeader): (string, bool) =
   let user: seq[User] = server.authStore.users.filter(u => u.username == qheader.username)
   if user.len != 1:
     error "Server error, duplicate user found. Try remove one user from auth.yaml file"
-    return false
-  return verifyPassowrd(qheader.password, user[0].passwordHash)
+    return ("", false)
+  return (user[0].role, verifyPassowrd(qheader.password, user[0].passwordHash))
   
 
 ## TODO disconnect current connection
@@ -143,8 +163,11 @@ proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =
 
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
   var connected = false
+  var username = ""
+  var role = ""
   try:
     while true:
+      var unauthorized = false
       let headerLine = client.recvLine()
       info "incoming: " & headerLine
       info "connected: " & $connected
@@ -163,44 +186,62 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         
         case qheader.command:
         of GET:
-          server.procced(client)
-          let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
-          server.response(client, msgSeq)
+          if server.proceedCheck(username, role, qheader.topic, TRead):
+            server.proceed(client)
+            let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
+            server.response(client, msgSeq) 
+          else: unauthorized = true
         of PUT, PUTACK, PUBLISH:
           # haven't confirm the behavior of publish, leaving it an alias of PUT
-          server.procced(client)
-          server.store(client, qheader)
+          if server.proceedCheck(username, role, qheader.topic, TWrite):
+            server.proceed(client)
+            server.store(client, qheader)
+          else: unauthorized = true
         of SUBSCRIBE:
-          server.procced(client)
-          server.subscribe(client, qheader.topic)
+          if server.proceedCheck(username, role, qheader.topic, TRead):
+            server.proceed(client)
+            server.subscribe(client, qheader.topic)
+          else: unauthorized = true
         of UNSUBSCRIBE:
           server.unsubscribe(client, qheader.topic)
         of PING:
           server.ping(client)
         of CLEAR:
-          server.procced(client)
-          server.clear(client, qheader)
+          if server.proceedCheck(username, role, qheader.topic, TClear):
+            server.proceed(client)
+            server.clear(client, qheader)
+          else: unauthorized = true
         of NEW:
-          server.procced(client)
-          server.newtopic(client, qheader.topic, qheader.topicSize,
+          if server.proceedCheck(username, role, qheader.topic, TNew):
+            server.proceed(client)
+            server.newtopic(client, qheader.topic, qheader.topicSize,
               qheader.connectionType)
+          else: unauthorized = true
         of DISPLAY:
-          server.procced(client)
-          server.listtopic(client, qheader)
+          if server.proceedCheck(username, role, qheader.topic, TRead):
+            server.proceed(client)
+            server.listtopic(client, qheader)
+          else: unauthorized = true
         of ACKNOWLEDGE:
-          server.procced(client)
+          server.proceed(client)
         of CONNECT:
-          let authenticated = server.connect(client, qheader)
+          let (r, authenticated) = server.connect(client, qheader)
           if not authenticated:
-            server.decline(client, "Unauthorized access")
+            unauthorized = true             
             break
           else:
-            server.procced(client, "CONNECTED")
+            username = qheader.username
+            role = r
+            server.proceed(client, "CONNECTED")
             connected = true
             info &"connection status: {connected}"
           # of DISCONNECT:
           #   remove session from secure service
           #   echo "not implemented"
+
+        if unauthorized:
+          server.decline(client, $UNAUTHORIZED_ACCESS)
+
       server.endofresp(client)
   except:
     let errMsg = getCurrentExceptionMsg()

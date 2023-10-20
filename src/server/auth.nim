@@ -121,6 +121,42 @@ proc findUser(auth: Auth, username: string): (int, Option[User]) =
   return if found: (index, some(user)) else: (-1, none(User))
 
 
+proc userHasAccess*(auth: Auth, username, topic: string): bool = 
+  let users = auth.users.filter(u => u.username == username)
+  if users.len > 0:
+    if users[0].topics.contains(topic):
+      return true
+    else:
+      return false
+  else:
+    return false
+
+
+proc roleHasAccess*(auth: Auth, role, topic: string, accessMode: AccessMode): bool =
+  ## admin access
+  if role == "admin" and topic == "*" and accessMode == TRead:
+    return true
+  if role == "admin" and accessMode == TNew:
+    octolog.info "authorized to create new topic"
+    return true
+
+  let roles = auth.roles.filter(r => r.name == role)
+  if role.len > 0:
+    let topics = roles[0].topics.filter(t => t.name == topic)
+    ## topic not exists
+    if topics.len == 0:
+      return false
+    ## access mode is right
+    if topics[0].access == $TAll:
+      result = true
+    elif topics[0].access.contains($accessMode):
+      result = true
+    else:
+      result = false
+  else:
+    result = false
+
+
 proc createUser*(username, password: string, role: Option[string],
     topics: seq[string]): void {.raises: [AuthError, AuthFileError].} =
   try:
@@ -181,7 +217,7 @@ proc updateUser*(username: string, password, role: Option[string], topics: seq[
     auth.users.delete(index)
     auth.users.add(user.get)
     printUserInfo(user.get, password.isSome)
-    stdoutWarning "Changes will take effect after octoque restart"
+    stdoutWarning "Changes will take effect after octoque restart\n"
     saveAuth(auth)
   except AuthFileError as aferr:
     raise newException(AuthFileError, aferr.msg)

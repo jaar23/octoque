@@ -30,7 +30,7 @@ var serverOpts = newParser:
       option("-r", "--role", default = some("user"), help = "user's role")
     command("update"):
       flag("-a", "--append", help = "append to user attributes")
-      flag("-f", "--replace", help = "replace to user attributes")
+      flag("-rp", "--replace", help = "replace to user attributes")
       option("-u", "--username", help = "username", required = true)
       option("-p", "--password", help = "user's password")
       option("-t", "--topic", help = "topic that is authorized to access",
