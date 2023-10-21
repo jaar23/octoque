@@ -176,7 +176,6 @@ proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: Catchab
   while true:
     stdoutCmd "command > "
     var commandLine = readLine(stdin)
-    echo "command: " & commandLine
     if commandLine != "":
       commandHistory.add(commandLine)
       if commandLine.toLowerAscii() == "quit":
@@ -184,8 +183,10 @@ proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: Catchab
       elif commandLine.toLowerAscii() == "history":
         for h in commandHistory:
           handleResult(h)
+        continue
       elif commandLine.toLowerAscii() == "help":
         handleHelp()
+        continue
       qheader = parseQHeader(commandLine)
       conn.send(commandLine & "\r\L")
       break
@@ -193,7 +194,7 @@ proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: Catchab
 
 proc sendPayload(conn: var Socket, qheader: QHeader): void =
   let proceed = conn.recvLine()
-  echo "proceed?" & proceed
+  #echo "proceed?" & proceed
   if proceed.strip() == "PROCEED":
     for row in 0.uint8()..<qheader.payloadRows:
       stdoutData "data    > "
@@ -235,7 +236,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
           sendCommand(conn, qheader)
           state = "result"
         elif state == "result":
-          echo qheader
+          #echo qheader
           if qheader.command == PUT or qheader.command == PUTACK or
               qheader.command == PUBLISH:
             sendPayload(conn, qheader)

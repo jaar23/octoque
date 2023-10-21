@@ -17,6 +17,7 @@ var serverOpts = newParser:
     option("-l", "--logfile", help = "log file name, you can define the file path here too")
     option("-t", "--max-topic", default = some("8"),
         help = "maximum topic running on this queue server, default is 8")
+  flag("-s", "--status", help = "check octoque running status")
   command("repl"):
     option("-a", "--address", default = some("0.0.0.0"),
         help = "server address")
@@ -41,7 +42,7 @@ var serverOpts = newParser:
       option("-t", "--topic", help = "topic that is authorized to access",
           multiple = true)
       option("-r", "--role", help = "user's role")
-  help("{prog} is a simple queue system with broker and pubsub implementation.\n")
+  help("{prog} is a simple queue system with broker and pubsub implementation.")
 
 
 proc graceExit() {.noconv.} =
@@ -78,8 +79,10 @@ proc main() =
     setControlCHook(graceExit)
     let run = opts.run.get
     var logfile = if run.logfile_opt.isSome: run.logfile else: now().format("yyyyMMddHHmm")
+    var logconsole = not run.noconsolelogger
+    if run.detach: logconsole = false
     octologStart(filename = logfile, usefilelogger = not run.nofilelogger,
-                 useconsolelogger = not run.noconsolelogger)
+                 useconsolelogger = logconsole)
     ## 8 default
     ## 1 for main thread
     ## 1 for logging
@@ -96,8 +99,6 @@ proc main() =
     setMinPoolSize(minPoolSize)
     info &"minimum threads in this startup: {minPoolSize}"
     info &"octoque is started {run.address}:{run.port}"
-    # if run.interactive:
-    #   replStart(run.address, run.port.parseInt())
     let server = newQueueServer(run.address, run.port.parseInt(),
         run.max_topic.parseInt().uint8())
     server.addQueueTopic("default", BROKER)
@@ -107,7 +108,6 @@ proc main() =
     octologStop()
   elif opts.repl.isSome():
     replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
-
 
 
 when isMainModule:

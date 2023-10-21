@@ -55,6 +55,12 @@ todo:
 
     - start with `octoque run`
 
+[x] start in detach mode
+    
+    start with `octoque run -d &`
+    
+    should upgrade when osproc's poDaemon is available
+
 [ ] start with file config
 
 [ ] error queue
