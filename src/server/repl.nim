@@ -17,8 +17,8 @@ const replMessage = """
     ooo    ccc  ttttt   ooo    qqq    u   u  eeeee
    o   o  c       t    o   o  q   q   u   u  e
    o   o  c       t    o   o  q   q   u   u  eeeee
-   o   o  c       t    o   o  q  qq   u   u  e
-    ooo    ccc    t     ooo    qqq q   uuu   eeeee
+   o   o  c       t    o   o  q q q   u   u  e
+    ooo    ccc    t     ooo    qq q    uuu   eeeee
 """
 const lastUpdated = "17 October 2023"
 var commandHistory {.threadvar.}: seq[string]
@@ -79,6 +79,7 @@ proc handleQuit() =
 
 proc handleSubscribe(conn: var Socket) =
   proc handleCtrlC() {.noconv.} =
+    #conn.send("OTQ UNSUBSCRIBE\n")
     handleQuit()
     quit(0)
   setControlCHook(handleCtrlC)
@@ -92,6 +93,8 @@ proc handleSubscribe(conn: var Socket) =
       #echo "sub have data"
       if recvData.strip().startsWith("DECLINE"):
         handleDecline(recvData)
+      elif recvData.strip().endsWith("ENDOFRESP"):
+        return
       else:
         handleResult(recvData)
     else:
@@ -135,83 +138,11 @@ proc handleHelp() =
   echo ""
 
 
-proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
-  stdoutCmd "command > "
-  var connLine = readLine(stdin)
-
-  commandHistory.add(connLine)
-  conn = net.dial(serverAddr, Port(serverPort))
-  if connLine.toLowerAscii() == "quit":
-    handleQuit()
-  elif connLine == "help":
-    handleHelp()
-    return false
-  conn.send(connLine & "\n")
-  var resp = conn.recvLine()
-  if resp.strip() == "CONNECTED":
-    handleResult(resp)
-    connected = true
-    return true
-  else:
-    handleDecline(resp)
-    connected = false
-    return false
-
-
-proc prepareSend(conn: Socket, line: string): bool =
-  conn.send(line & "\n")
-  var resp = conn.recvLine()
-  if resp.strip().len == 0:
-    return false
-  if resp.strip() == "PROCEED":
-    return true
-  elif resp.startsWith("DECLINE"):
-    handleDecline(resp)
-    return false
-  elif resp.strip() == "PONG":
-    handleResult(resp)
-    return true
-  else:
-    return true
-
-
-proc sendCommand(conn: Socket, qheader: var QHeader): bool {.raises: CatchableError.} =
-  stdoutCmd "command > "
-  var commandLine = readLine(stdin)
-  if commandLine.len == 0:
-    return
-  commandHistory.add(commandLine)
-  if commandLine.toLowerAscii() == "quit":
-    handleQuit()
-  elif commandLine.toLowerAscii() == "history":
-    for h in commandHistory:
-      handleResult(h)
-    return false
-  elif commandLine.toLowerAscii() == "help":
-    handleHelp()
-    return false
-  #echo commandLine
-  qheader = parseQHeader(commandLine)
-  #echo qheader
-  # if qheader.command == PING:
-  #   conn.send(commandLine & "\n")
-  #   var resp = conn.recvLine()
-  #   if resp.startsWith("DECLINE"):
-  #     handleDecline(resp)
-  #     return false
-  #   else:
-  #     handleResult(resp)
-  #     return true
-  if qheader.command == UNSUBSCRIBE:
-    handleResult("this command does not support in repl mode")
-    return false
-  else:
-    return prepareSend(conn, commandLine)
-
-
 proc readResult(conn: Socket) =
   while true:
+    # echo $getThreadId() & "waiting for feedback"
     var dataResp = conn.recvLine()
+    # echo $getThreadId() & "'" & $dataResp & "'"
     if dataResp.strip() != "":
       if dataResp.startsWith("DECLINE"):
         handleDecline(dataResp)
@@ -219,10 +150,105 @@ proc readResult(conn: Socket) =
         break
       elif dataResp.strip() == "PROCEED":
         continue
-      elif dataResp.strip() == "PONG":
-        handleResult(dataResp)
       else:
         handleResult(dataResp)
+  #echo "exit reading"
+
+
+proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
+  while true:
+    stdoutCmd "command > "
+    var connLine = readLine(stdin)
+    if connLine.len > 0:
+      if connLine.toLowerAscii() == "quit":
+        handleQuit()
+        break
+      elif connLine == "help":
+        handleHelp()
+        return false
+      commandHistory.add(connLine)
+      conn = net.dial(serverAddr, Port(serverPort))
+      conn.send(connLine & "\n")
+      var resp = conn.recvLine()
+      if resp.strip() == "CONNECTED":
+        handleResult(resp)
+        connected = true
+      else:
+        handleDecline(resp)
+        connected = false
+      readResult(conn)
+      return connected
+
+
+# proc disconnect(conn: var Socket): void =
+#   conn.close()
+#
+
+# proc prepareSend(conn: Socket, line: string): bool =
+#   conn.send(line & "\n")
+#   var resp = conn.recvLine()
+#   if resp.strip().len == 0:
+#     return false
+#   if resp.strip() == "PROCEED":
+#     return true
+#   elif resp.startsWith("DECLINE"):
+#     handleDecline(resp)
+#     return false
+#   # elif resp.strip() == "PONG":
+#   #   handleResult(resp)
+#   #   return true
+#   else:
+#     return true
+
+
+proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: CatchableError.} =
+  while true:
+    stdoutCmd "command > "
+    var commandLine = readLine(stdin)
+    echo "command: " & commandLine
+    if commandLine != "":
+      commandHistory.add(commandLine)
+      if commandLine.toLowerAscii() == "quit":
+        handleQuit()
+      elif commandLine.toLowerAscii() == "history":
+        for h in commandHistory:
+          handleResult(h)
+        # return false
+      elif commandLine.toLowerAscii() == "help":
+        handleHelp()
+        # return false
+      qheader = parseQHeader(commandLine)
+      conn.send(commandLine & "\r\L")
+      break
+  # if qheader.command == UNSUBSCRIBE:
+  #   handleResult("this command does not support in repl mode")
+  #   return false
+  # elif qheader.command == PING:    
+  #   conn.send(commandLine & "\n")
+  #   #readResult(conn)
+  #   return true
+  # elif qheader.command == DISCONNECT:
+  #   conn.send(commandLine & "\n")
+  #   readResult(conn)
+  #   conn = nil
+  #   connected = false
+  #   return false
+  # else:
+  #   return prepareSend(conn, commandLine)
+
+proc sendPayload(conn: var Socket, qheader: QHeader): void =
+  let proceed = conn.recvLine()
+  echo "proceed?" & proceed
+  if proceed.strip() == "PROCEED":
+    for row in 0.uint8()..<qheader.payloadRows:
+      stdoutData "data    > "
+      var dataLine = readLine(stdin)
+      if dataLine.toLowerAscii() == "quit":
+        break
+      conn.send(dataLine & "\n")
+  else:
+    handleDecline(proceed)
+
 
 
 proc replExecutor(serverAddr: string, serverPort: int): void =
@@ -242,7 +268,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
   var conn: Socket = nil
   var qheader: QHeader
   var state = "command"
-  var proceed = false
+  #var proceed = false
   commandHistory = newSeq[string]()
   while true:
     try:
@@ -252,27 +278,32 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
       else:
         if state == "command":
           qheader = new(QHeader)[]
-          proceed = sendCommand(conn, qheader)
-          if not proceed:
-            continue
+          sendCommand(conn, qheader)
+          # proceed = sendCommand(conn, qheader)
+          # if not proceed:
+          #   continue
           state = "result"
         elif state == "result":
-          #e#cho qheader
-          if qheader.command == PUT or qheader.command == PUTACK or qheader.command == PUBLISH:
-            for row in 0.uint8()..<qheader.payloadRows:
-              stdoutData "data    > "
-              var dataLine = readLine(stdin)
-              if dataLine.toLowerAscii() == "quit":
-                break
-              conn.send(dataLine & "\n")
+          echo qheader
+          if qheader.command == PUT or qheader.command == PUTACK or
+              qheader.command == PUBLISH:
+            # for row in 0.uint8()..<qheader.payloadRows:
+            #   stdoutData "data    > "
+            #   var dataLine = readLine(stdin)
+            #   if dataLine.toLowerAscii() == "quit":
+            #     break
+            #   conn.send(dataLine & "\n")
+            sendPayload(conn, qheader)
+            readResult(conn)
           elif qheader.command == SUBSCRIBE:
             handleSubscribe(conn)
-          readResult(conn)
+          else:
+            #echo "core rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrread"
+            readResult(conn)
           state = "command"
         else:
           stdoutError "error   > "
           stdoutWrite "unknown state"
-          #handleDecline("DECLINE:unknown state")
     except:
       handleDecline("DECLINE:" & getCurrentExceptionMsg())
   handleQuit()

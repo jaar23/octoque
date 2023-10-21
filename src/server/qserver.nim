@@ -51,7 +51,8 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
 ## check if user has correct role to access (rwnc)
 ## check queue state before PROCEED
 ## check qtopic state before proceed
-proc proceedCheck(server: QueueServer, username, role, topic: string, accessMode: AccessMode): bool =
+proc proceedCheck(server: QueueServer, username, role, topic: string,
+    accessMode: AccessMode): bool =
   if server.authStore.userHasAccess(username, topic):
     info "authorized access"
     return true
@@ -75,12 +76,13 @@ proc endofresp(server: QueueServer, client: Socket): void =
 
 ## TODO: authentication with file based authentication
 proc connect(server: QueueServer, client: Socket, qheader: QHeader): (string, bool) =
-  let user: seq[User] = server.authStore.users.filter(u => u.username == qheader.username)
+  let user: seq[User] = server.authStore.users.filter(u => u.username ==
+      qheader.username)
   if user.len != 1:
     error "Server error, duplicate user found. Try remove one user from auth.yaml file"
     return ("", false)
   return (user[0].role, verifyPassowrd(qheader.password, user[0].passwordHash))
-  
+
 
 ## TODO disconnect current connection
 # proc disconnect(server: var QueueServer): void =
@@ -123,9 +125,13 @@ proc clear(server: QueueServer, client: Socket, qheader: QHeader): void =
 
 proc subscribe(server: QueueServer, client: Socket, topicName: string): void =
   try:
-    server.queue.subscribe(topicName, client)
+    let topic = server.queue.find(topicName)
+    if topic.isSome and topic.get.connectionType() == PUBSUB:
+      server.queue.subscribe(topicName, client)
+    else:
+      raise newException(CatchableError, "Topic is not subscribable")
   except:
-    echo "raise here!!!"
+    debug "raise here!!!"
     server.decline(client, getCurrentExceptionMsg())
 
 
@@ -178,15 +184,17 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         if qheader.protocol != OTQ:
           raise newException(ProcessError, $NOT_IMPLEMENTED)
         if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
-            qheader.command != NEW and qheader.command != CONNECT:
+            qheader.command != NEW and qheader.command != CONNECT and
+                qheader.command != DISCONNECT:
           raise newException(ProcessError, $TOPIC_NOT_FOUND)
-        
+
         case qheader.command:
         of GET:
           if server.proceedCheck(username, role, qheader.topic, TRead):
             server.proceed(client)
-            let msgSeq = server.queue.dequeue(qheader.topic, qheader.numberOfMsg)
-            server.response(client, msgSeq) 
+            let msgSeq = server.queue.dequeue(qheader.topic,
+                qheader.numberOfMsg)
+            server.response(client, msgSeq)
           else: unauthorized = true
         of PUT, PUTACK, PUBLISH:
           # haven't confirm the behavior of publish, leaving it an alias of PUT
@@ -201,8 +209,10 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           else: unauthorized = true
         of UNSUBSCRIBE:
           server.unsubscribe(client, qheader.topic)
+          #server.endofresp(client)
         of PING:
           server.ping(client, qheader.topic)
+          #server.endofresp(client)
         of CLEAR:
           if server.proceedCheck(username, role, qheader.topic, TClear):
             server.proceed(client)
@@ -218,13 +228,14 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TRead):
             server.proceed(client)
             server.listtopic(client, qheader)
+            #server.endofresp(client)
           else: unauthorized = true
         of ACKNOWLEDGE:
           server.proceed(client)
         of CONNECT:
           let (r, authenticated) = server.connect(client, qheader)
           if not authenticated:
-            unauthorized = true             
+            unauthorized = true
             break
           else:
             username = qheader.username
@@ -232,9 +243,10 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
             server.proceed(client, "CONNECTED")
             connected = true
             info &"connection status: {connected}"
-          # of DISCONNECT:
-          #   remove session from secure service
-          #   echo "not implemented"
+        of DISCONNECT:
+          connected = false
+          info "session disconnected"
+          break
 
         if unauthorized:
           server.decline(client, $UNAUTHORIZED_ACCESS)
@@ -244,6 +256,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
     let errMsg = getCurrentExceptionMsg()
     server.decline(client, errMsg)
   finally:
+    info "session closed"
     client.close()
 
 

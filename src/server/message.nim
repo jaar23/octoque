@@ -20,7 +20,7 @@ type
     NEW = "NEW"
     DISPLAY = "DISPLAY"
     CONNECT = "CONNECT"
-    #DISCONNECT  = "DISCONNECT"
+    DISCONNECT = "DISCONNECT"
     ACKNOWLEDGE = "ACKNOWLEDGE"
 
   Protocol* = enum
@@ -74,8 +74,8 @@ proc parseQCommand(command: string): QCommand {.raises: ParseError.} =
     result = DISPLAY
   of "CONNECT":
     result = CONNECT
-  #of "DISCONNECT":
-  #  result = DISCONNECT
+  of "DISCONNECT":
+    result = DISCONNECT
   of "NEW":
     result = NEW
   of "ACKNOWLEDGE":
@@ -123,24 +123,28 @@ proc parseTopicConnectionType(topicType: string): ConnectionType {.raises: Parse
 proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   result = QHeader()
   let lineArr = line.split(" ")
-  result.protocol = if lineArr.len > 0: 
+  result.protocol = if lineArr.len > 0:
     parseProtocol(lineArr[0]) else: raise newException(ParseError, "Missing protocol")
-  result.command = if lineArr.len > 1: parseQCommand(lineArr[1]) 
-  else: raise newException(ParseError, "Missing command")
-  result.topic = if lineArr.len > 2: lineArr[2].strip() else: raise newException(
-      ParseError, "Missing topic name")
+  result.command = if lineArr.len > 1:
+    parseQCommand(lineArr[1]) else: raise newException(ParseError, "Missing command")
+
+  if result.command == DISCONNECT:
+    return result
+  else:
+    result.topic = if lineArr.len > 2:
+      lineArr[2].strip() else: raise newException(ParseError, "Missing topic name")
 
   if result.command == GET:
-    result.numberOfMsg = if lineArr.len > 3: lineArr[3].parseInt().uint8() else: raise newException(
-        ParseError, "Missing number of message to retrieve")
-    result.transferMethod = if lineArr.len > 4: parseTransferMethod(lineArr[
-        4]) else: raise newException(ParseError, "Missing  transfer method")
+    result.numberOfMsg = if lineArr.len > 3:
+      lineArr[3].parseInt().uint8() else: raise newException(ParseError, "Missing number of message to retrieve")
+    result.transferMethod = if lineArr.len > 4:
+      parseTransferMethod(lineArr[4]) else: raise newException(ParseError, "Missing  transfer method")
 
   if result.command == PUT or result.command == PUTACK or result.command == PUBLISH:
-    result.payloadRows = if lineArr.len > 3: lineArr[3].parseInt().uint8() else: raise newException(
-        ParseError, "Missing number of payload message")
-    result.transferMethod = if lineArr.len > 4: parseTransferMethod(lineArr[
-        4]) else: raise newException(ParseError, "Missing transfer method")
+    result.payloadRows = if lineArr.len > 3:
+      lineArr[3].parseInt().uint8() else: raise newException(ParseError, "Missing number of payload message")
+    result.transferMethod = if lineArr.len > 4:
+      parseTransferMethod(lineArr[4]) else: raise newException(ParseError, "Missing transfer method")
     if lineArr.len > 5:
       result.lifespan = lineArr[5].parseInt()
 
