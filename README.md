@@ -14,7 +14,11 @@ octoque's queue has topic to help organize the message storing in the message qu
         │
         └── pubsub topic [messages....]
 ```
-The current message queue only running in FIFO mode.
+The current message queue only running in FIFO mode. There is two topic connection type, `BROKER` and `PUBSUB`. 
+
+`BROKER` works as a message broker, it is request-response based, the queue server will handling incoming request and process it accordingly. 
+
+`PUBSUB` used to allow application to publish and subcribe on certain queue topic, whenever there are new messages reached the queue topic, it will be automatic push to its subscriber.
 
 octoque command started with its own protocol, `otq`, it also has its own comand format, for example:
 
@@ -43,6 +47,6 @@ octoque command started with its own protocol, `otq`, it also has its own comand
 
 To try out, you can run `octoque repl` to start octoque in REPL mode, then you can run the command above in the terminal.
 
-[Getting started](./doc/getting-started)
+[Getting started](./doc/getting-started.md)
 
 More documentation is coming soon.
