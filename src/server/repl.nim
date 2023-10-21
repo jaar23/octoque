@@ -112,6 +112,10 @@ proc handleHelp() =
   stdoutWrite "'otq display default', to display the default topic"
   stdoutWrite "'otq display *', to display all topics"
   echo ""
+  stdoutResult "PING\n"
+  stdoutWrite "format: <otq> <PING> <topic>"
+  stdoutWrite "'otq ping default', check connection to default topic"
+  echo ""
   stdoutResult "PUT, PUTACK\n"
   stdoutWrite "format: <otq> <PUT, PUTACK> <topic> <number-of-message> <batch>"
   stdoutWrite "'otq put default 1 batch', put one message to default topic with batch mode"
@@ -186,7 +190,9 @@ proc sendCommand(conn: Socket, qheader: var QHeader): bool {.raises: CatchableEr
   elif commandLine.toLowerAscii() == "help":
     handleHelp()
     return false
+  #echo commandLine
   qheader = parseQHeader(commandLine)
+  #echo qheader
   # if qheader.command == PING:
   #   conn.send(commandLine & "\n")
   #   var resp = conn.recvLine()
@@ -251,6 +257,7 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
             continue
           state = "result"
         elif state == "result":
+          #e#cho qheader
           if qheader.command == PUT or qheader.command == PUTACK or qheader.command == PUBLISH:
             for row in 0.uint8()..<qheader.payloadRows:
               stdoutData "data    > "

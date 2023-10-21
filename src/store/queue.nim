@@ -15,7 +15,7 @@ type
   QueueError* = object of CatchableError
 
 
-proc find (self: ref Queue, topicName: string): Option[ref QTopic] =
+proc find*(self: ref Queue, topicName: string): Option[ref QTopic] =
   result = none(ref QTopic)
   if topicName == "":
     return result

@@ -52,12 +52,6 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
 ## check queue state before PROCEED
 ## check qtopic state before proceed
 proc proceedCheck(server: QueueServer, username, role, topic: string, accessMode: AccessMode): bool =
-  # if role == "admin" and topic == "*":
-  #   info "authorized access *"
-  #   return true
-  # if role == "admin" and accessMode == TNew:
-  #   info "authorized to create new topic"
-  #   return true
   if server.authStore.userHasAccess(username, topic):
     info "authorized access"
     return true
@@ -112,8 +106,11 @@ proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
     echo "not implemented"
 
 
-proc ping(server: QueueServer, client: Socket): void =
-  client.send("PONG\n")
+proc ping(server: QueueServer, client: Socket, topic: string): void =
+  let topicOpt = server.queue.find(topic)
+  if topicOpt.isSome:
+    client.send("PONG\n")
+  else: client.send("NOT FOUND\n")
 
 
 proc clear(server: QueueServer, client: Socket, qheader: QHeader): void =
@@ -205,7 +202,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         of UNSUBSCRIBE:
           server.unsubscribe(client, qheader.topic)
         of PING:
-          server.ping(client)
+          server.ping(client, qheader.topic)
         of CLEAR:
           if server.proceedCheck(username, role, qheader.topic, TClear):
             server.proceed(client)
