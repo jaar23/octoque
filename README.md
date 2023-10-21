@@ -1,104 +1,46 @@
 # octoque
-simple queue server implemented in nim
+octoque is a simple message queue server implemented in nim. The initiative of creating octoque is, learn by doing, a lot of the features implemented here might not be the best approach but it should be usable. It works similar to redis, but acting more towards a message queue.
 
-todo:
+octoque's queue has topic to help organize the message storing in the message queue. A simple illustration as below:
 
-[x] pubsub channel
+```shell
+├── queue server                                                                 
+│   
+└── queue
+    │   
+    └── topics
+        │
+        └── default topic [messages....]
+        │
+        └── pubsub topic [messages....]
+```
+The current message queue only running in FIFO mode.
 
-[x] multiple subcriber (push and broadcast based)
+octoque command started with its own protocol, `otq`, it also has its own comand format, for example:
 
-[ ] subcribe to multiple topic
+```shell
+## connect to octoque, acquire a conection by authenticate with username/password
+> otq connect admin password
 
-[ ] publish to multiple topic
+## display the state of all the queue topic
+> otq display *
 
-[ ] check on state before access
+## put a new message to default topic with batch delivery mode
+> otq put default 1 batch
 
-    - queue state
+## get a message from default topic with batch delivery mode
+> otq get default 1 batch
 
-    - topic state
+## subscribe to pubsub topic, all new message will be received automatically
+> otq subscribe pubsub
 
-[ ] message properties (internal use)
+## create new topic with broker type in octoque
+> otq new topic1 broker
 
-[x] logging for common and pubsub channel
+## disconnect from octoque
+> otq disconnect
+```
 
-[x] standardize response
+To try out, you can run `octoque repl` to start octoque in REPL mode, then you can run the command above in the terminal.
 
-[x] standardize request
-    
-    example:
-    
-    - get command
-        
-        OTQ GET default 1 BATCH
-       
-    
-    -  put command 
-        
-        OTQ PUT default 1  BATCH 11
-        hello world
-       
-[x] new topic on the fly
-    
-    example:
-
-    OTQ NEW APPTOPIC BROKER
-
-[x] REPL, send command to octoque without using the client.
-   
-    example:
-
-    - start with `octoque repl`
-
-[x] start with command line
-    
-    example:
-
-    - start with `octoque run`
-
-[x] start in detach mode
-    
-    start with `octoque run -d &`
-    
-    should upgrade when osproc's poDaemon is available
-
-[ ] start with file config
-
-[ ] error queue
-
-[ ] schema based queue
-
-[ ] streaming of data 
-
-    - stream from file
-
-    - stream from memory
-[x] batch delivery
-
-[ ] secure queue access with external secure services
-
-[x] file-based authentication as default secure service
-    
-    dependencies: argon2, libsodium
-    
-    fedora / rhel: `sudo yum install libsodium -y`
-
-    macos: `brew install libsodium`
-    
-    otq adm create -u user01 -p password -r admin -t default -t pubsub
-
-[ ] COMMIT command to persist store
-
-[ ] persistent store
-
-[ ] replay queue based on log
-
-[ ] monitoring
-
-[x] running in single core cpu environment
-    
-    current implementation keeping the queue data in a long running threads.
-    this required the process to keep multiple threads which causing the program
-    running out of available thread when adding new topic. 
-    after evaluation, current resolution is to limit the number of available topic
-    running in the process. there is always a limitation for a low end hardware.
-    in this case, pubsub will be limited by the number of available thread.
+More documentation is coming soon.
