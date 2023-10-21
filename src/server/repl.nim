@@ -79,18 +79,13 @@ proc handleQuit() =
 
 proc handleSubscribe(conn: var Socket) =
   proc handleCtrlC() {.noconv.} =
-    #conn.send("OTQ UNSUBSCRIBE\n")
     handleQuit()
     quit(0)
   setControlCHook(handleCtrlC)
   stdoutInfo "ctrl+c to exit subscribe\n"
   while true and conn != nil:
-    #echo "sub recv"
-    #echo "b unsubscribe?" & $unsubscribe
     let recvData = conn.recvLine()
-    #echo "sub send"
     if recvData.strip().len > 0:
-      #echo "sub have data"
       if recvData.strip().startsWith("DECLINE"):
         handleDecline(recvData)
       elif recvData.strip().endsWith("ENDOFRESP"):
@@ -99,7 +94,6 @@ proc handleSubscribe(conn: var Socket) =
         handleResult(recvData)
     else:
       conn.send("REPLPONG\n")
-    #echo "unsubscribe?" & $unsubscribe
   unsetControlCHook()
 
 
@@ -140,9 +134,7 @@ proc handleHelp() =
 
 proc readResult(conn: Socket) =
   while true:
-    # echo $getThreadId() & "waiting for feedback"
     var dataResp = conn.recvLine()
-    # echo $getThreadId() & "'" & $dataResp & "'"
     if dataResp.strip() != "":
       if dataResp.startsWith("DECLINE"):
         handleDecline(dataResp)
@@ -152,7 +144,6 @@ proc readResult(conn: Socket) =
         continue
       else:
         handleResult(dataResp)
-  #echo "exit reading"
 
 
 proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
@@ -180,26 +171,6 @@ proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
       return connected
 
 
-# proc disconnect(conn: var Socket): void =
-#   conn.close()
-#
-
-# proc prepareSend(conn: Socket, line: string): bool =
-#   conn.send(line & "\n")
-#   var resp = conn.recvLine()
-#   if resp.strip().len == 0:
-#     return false
-#   if resp.strip() == "PROCEED":
-#     return true
-#   elif resp.startsWith("DECLINE"):
-#     handleDecline(resp)
-#     return false
-#   # elif resp.strip() == "PONG":
-#   #   handleResult(resp)
-#   #   return true
-#   else:
-#     return true
-
 
 proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: CatchableError.} =
   while true:
@@ -213,28 +184,12 @@ proc sendCommand(conn: var Socket, qheader: var QHeader): void {.raises: Catchab
       elif commandLine.toLowerAscii() == "history":
         for h in commandHistory:
           handleResult(h)
-        # return false
       elif commandLine.toLowerAscii() == "help":
         handleHelp()
-        # return false
       qheader = parseQHeader(commandLine)
       conn.send(commandLine & "\r\L")
       break
-  # if qheader.command == UNSUBSCRIBE:
-  #   handleResult("this command does not support in repl mode")
-  #   return false
-  # elif qheader.command == PING:    
-  #   conn.send(commandLine & "\n")
-  #   #readResult(conn)
-  #   return true
-  # elif qheader.command == DISCONNECT:
-  #   conn.send(commandLine & "\n")
-  #   readResult(conn)
-  #   conn = nil
-  #   connected = false
-  #   return false
-  # else:
-  #   return prepareSend(conn, commandLine)
+
 
 proc sendPayload(conn: var Socket, qheader: QHeader): void =
   let proceed = conn.recvLine()
@@ -268,7 +223,6 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
   var conn: Socket = nil
   var qheader: QHeader
   var state = "command"
-  #var proceed = false
   commandHistory = newSeq[string]()
   while true:
     try:
@@ -279,26 +233,16 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
         if state == "command":
           qheader = new(QHeader)[]
           sendCommand(conn, qheader)
-          # proceed = sendCommand(conn, qheader)
-          # if not proceed:
-          #   continue
           state = "result"
         elif state == "result":
           echo qheader
           if qheader.command == PUT or qheader.command == PUTACK or
               qheader.command == PUBLISH:
-            # for row in 0.uint8()..<qheader.payloadRows:
-            #   stdoutData "data    > "
-            #   var dataLine = readLine(stdin)
-            #   if dataLine.toLowerAscii() == "quit":
-            #     break
-            #   conn.send(dataLine & "\n")
             sendPayload(conn, qheader)
             readResult(conn)
           elif qheader.command == SUBSCRIBE:
             handleSubscribe(conn)
           else:
-            #echo "core rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrread"
             readResult(conn)
           state = "command"
         else:
@@ -308,78 +252,6 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
       handleDecline("DECLINE:" & getCurrentExceptionMsg())
   handleQuit()
 
-# proc repl(serverAddr: string, serverPort: int): void =
-#   echo "start repl session"
-#   var headerLine: string
-#   var dataLine: string
-#   #var acqConn = true
-#   var conn: Socket
-#   var running = true
-#   var qheader: QHeader
-#   var state = "command"
-#   while running:
-#     if state != "command" and conn != nil:
-#       if qheader.command == PUT or qheader.command == PUTACK:
-#         for row in 0.uint8()..<qheader.payloadRows:
-#           stdoutData "data    > "
-#           dataLine = readLine(stdin)
-#           if dataLine.toLowerAscii() == "quit":
-#             running = false
-#             break
-#           conn.send(dataLine & "\n")
-#       if qheader.command == DISPLAY:
-#         if qheader.topic == "*":
-#           qheader.numberOfMsg = 999
-#         else:
-#           qheader.numberOfMsg = 6
-#       if qheader.command == PUTACK:
-#         qheader.numberOfMsg = 2
-#       readResult(conn, qheader.numberOfMsg)
-#       #conn = nil
-#       state = "command"
-#     else:
-#       stdoutCmd "command > "
-#       headerLine = readLine(stdin)
-#       if headerLine.toLowerAscii() == "quit":
-#         running = false
-#         break
-#       else:
-#         try:
-#           qheader = parseQHeader(headerLine)
-#           if qheader.command == PING:
-#             var conn = net.dial(serverAddr, Port(serverPort))
-#             conn.send(headerLine & "\n")
-#             var resp = conn.recvLine()
-#             if resp.startsWith("DECLINE"):
-#               handleDecline(resp)
-#             else:
-#               stdoutResult "result  > "
-#               stdoutWrite resp
-#             state = "command"
-#           elif qheader.command == PUBLISH or qheader.command == UNSUBSCRIBE or
-#           qheader.command == SUBSCRIBE:
-#             stdoutResult "result  > "
-#             stdoutWrite "this command does not support in repl currently"
-#             state = "command"
-#           elif qheader.command == CONNECT:
-#             conn = net.dial(serverAddr, Port(serverPort))
-#             conn.send(headerLine & "\n")
-#             var resp = conn.recvLine()
-#             if resp != "PROCEED":
-#               conn = nil
-#             else:
-#               stdoutResult "result > "
-#               stdoutWrite "CONNECTED"
-#           else:
-#             discard prepareSend(conn, headerLine)
-#             state = "result"
-#         except:
-#           stdoutError "error   > "
-#           stdoutWrite getCurrentExceptionMsg()
-#           state = "command"
-#
-#   echo "exit repl session"
-#   quit(0)
 
 proc replStart*(address: string, port: int) =
   replExecutor(address, port)

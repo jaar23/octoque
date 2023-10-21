@@ -49,8 +49,8 @@ proc addQueueTopic*(qserver: QueueServer, topicName: string,
 
 ## check if user has access to topic
 ## check if user has correct role to access (rwnc)
-## check queue state before PROCEED
-## check qtopic state before proceed
+##TODO: check queue state before PROCEED
+##TODO: check qtopic state before proceed
 proc proceedCheck(server: QueueServer, username, role, topic: string,
     accessMode: AccessMode): bool =
   if server.authStore.userHasAccess(username, topic):
@@ -74,7 +74,6 @@ proc endofresp(server: QueueServer, client: Socket): void =
   client.send("ENDOFRESP\n")
 
 
-## TODO: authentication with file based authentication
 proc connect(server: QueueServer, client: Socket, qheader: QHeader): (string, bool) =
   let user: seq[User] = server.authStore.users.filter(u => u.username ==
       qheader.username)
@@ -82,10 +81,6 @@ proc connect(server: QueueServer, client: Socket, qheader: QHeader): (string, bo
     error "Server error, duplicate user found. Try remove one user from auth.yaml file"
     return ("", false)
   return (user[0].role, verifyPassowrd(qheader.password, user[0].passwordHash))
-
-
-## TODO disconnect current connection
-# proc disconnect(server: var QueueServer): void =
 
 
 proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[
@@ -131,7 +126,6 @@ proc subscribe(server: QueueServer, client: Socket, topicName: string): void =
     else:
       raise newException(CatchableError, "Topic is not subscribable")
   except:
-    debug "raise here!!!"
     server.decline(client, getCurrentExceptionMsg())
 
 
@@ -175,14 +169,12 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
       info "incoming: " & headerLine
       info "connected: " & $connected
       if headerLine.len != 0:
-        #parse header
         let qheader = parseQHeader(headerLine)
         debug "qheader: " & $qheader
         if qheader.command != CONNECT and not connected:
           server.decline(client, $UNAUTHORIZED_ACCESS)
 
-        if qheader.protocol != OTQ:
-          raise newException(ProcessError, $NOT_IMPLEMENTED)
+        if qheader.protocol != OTQ: raise newException(ProcessError, $NOT_IMPLEMENTED)
         if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
             qheader.command != NEW and qheader.command != CONNECT and
                 qheader.command != DISCONNECT:
@@ -197,7 +189,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
             server.response(client, msgSeq)
           else: unauthorized = true
         of PUT, PUTACK, PUBLISH:
-          # haven't confirm the behavior of publish, leaving it an alias of PUT
+          # TODO: enhance publish to put message to multiple topics
           if server.proceedCheck(username, role, qheader.topic, TWrite):
             server.proceed(client)
             server.store(client, qheader)
@@ -207,12 +199,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
             server.proceed(client)
             server.subscribe(client, qheader.topic)
           else: unauthorized = true
-        of UNSUBSCRIBE:
-          server.unsubscribe(client, qheader.topic)
-          #server.endofresp(client)
-        of PING:
-          server.ping(client, qheader.topic)
-          #server.endofresp(client)
+        of UNSUBSCRIBE: server.unsubscribe(client, qheader.topic)
+        of PING: server.ping(client, qheader.topic)
         of CLEAR:
           if server.proceedCheck(username, role, qheader.topic, TClear):
             server.proceed(client)
@@ -228,10 +216,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TRead):
             server.proceed(client)
             server.listtopic(client, qheader)
-            #server.endofresp(client)
           else: unauthorized = true
-        of ACKNOWLEDGE:
-          server.proceed(client)
+        of ACKNOWLEDGE: server.proceed(client, "ACKNOWLEDGE")
         of CONNECT:
           let (r, authenticated) = server.connect(client, qheader)
           if not authenticated:
@@ -248,8 +234,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           info "session disconnected"
           break
 
-        if unauthorized:
-          server.decline(client, $UNAUTHORIZED_ACCESS)
+        if unauthorized: server.decline(client, $UNAUTHORIZED_ACCESS)
 
       server.endofresp(client)
   except:

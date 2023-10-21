@@ -116,10 +116,8 @@ proc parseTopicConnectionType(topicType: string): ConnectionType {.raises: Parse
   else:
     raise newException(ParseError, "Invalid connection type, accept only BROKER, PUBSUB")
 
+
 #OTQ PUT default 1 BATCH 11
-#hello world
-#XXXXXXXXXXXXXX
-#TODO more elegant way to parse different command message
 proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
   result = QHeader()
   let lineArr = line.split(" ")
