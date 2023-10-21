@@ -9,6 +9,16 @@ todo:
 
 [ ] subcribe to multiple topic
 
+[ ] publish to multiple topic
+
+[ ] check on state before access
+
+    - queue state
+
+    - topic state
+
+[ ] message properties (internal use)
+
 [x] logging for common and pubsub channel
 
 [x] standardize response
@@ -33,11 +43,17 @@ todo:
 
     OTQ NEW APPTOPIC BROKER
 
-[x] REPL, send command to octoque without using the client. Currently do not support for pubsub command.
+[x] REPL, send command to octoque without using the client.
    
     example:
 
-    - start with `octoque --interactive y`
+    - start with `octoque repl`
+
+[x] start with command line
+    
+    example:
+
+    - start with `octoque run`
 
 [ ] start with file config
 
@@ -45,7 +61,7 @@ todo:
 
 [ ] schema based queue
 
-[p] streaming of data 
+[ ] streaming of data 
 
     - stream from file
 
@@ -54,13 +70,15 @@ todo:
 
 [ ] secure queue access with external secure services
 
-[p] file-based authentication as default secure service
+[x] file-based authentication as default secure service
     
     dependencies: argon2, libsodium
     
     fedora / rhel: `sudo yum install libsodium -y`
 
     macos: `brew install libsodium`
+    
+    otq adm create -u user01 -p password -r admin -t default -t pubsub
 
 [ ] COMMIT command to persist store
 
