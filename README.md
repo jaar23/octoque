@@ -43,4 +43,6 @@ octoque command started with its own protocol, `otq`, it also has its own comand
 
 To try out, you can run `octoque repl` to start octoque in REPL mode, then you can run the command above in the terminal.
 
+[Getting started](./doc/getting-started)
+
 More documentation is coming soon.
