@@ -1,4 +1,4 @@
-import nimword, options, os, octolog, yaml, streams, sequtils, 
+import nimword, options, os, octolog, yaml, streams, sequtils,
        sugar, std/enumerate, terminal, strutils
 
 type
@@ -121,7 +121,7 @@ proc findUser(auth: Auth, username: string): (int, Option[User]) =
   return if found: (index, some(user)) else: (-1, none(User))
 
 
-proc userHasAccess*(auth: Auth, username, topic: string): bool = 
+proc userHasAccess*(auth: Auth, username, topic: string): bool =
   let users = auth.users.filter(u => u.username == username)
   if users.len > 0:
     if users[0].topics.contains(topic):
@@ -132,7 +132,8 @@ proc userHasAccess*(auth: Auth, username, topic: string): bool =
     return false
 
 
-proc roleHasAccess*(auth: Auth, role, topic: string, accessMode: AccessMode): bool =
+proc roleHasAccess*(auth: Auth, role, topic: string,
+    accessMode: AccessMode): bool =
   ## admin access
   if role == "admin" and topic == "*" and accessMode == TRead:
     return true
@@ -213,7 +214,7 @@ proc updateUser*(username: string, password, role: Option[string], topics: seq[
         user.get.topics = topics
     else:
       raise newException(CatchableError, "Unknown update mode passed in. This should not happen")
-    
+
     auth.users.delete(index)
     auth.users.add(user.get)
     printUserInfo(user.get, password.isSome)
@@ -227,8 +228,8 @@ proc updateUser*(username: string, password, role: Option[string], topics: seq[
     raise newException(AuthError, getCurrentExceptionMsg())
 
 
-proc removeUser*(username: string, topics: seq[string]): void {.raises: [AuthError,
-    AuthFileError].} =
+proc removeUser*(username: string, topics: seq[string]): void {.raises: [
+    AuthError, AuthFileError].} =
   try:
     var auth = getAuth()
     var (index, user) = findUser(auth, username)
@@ -248,7 +249,7 @@ proc removeUser*(username: string, topics: seq[string]): void {.raises: [AuthErr
         echo "Please enter admin password: "
         let adminPassword = readPasswordFromStdin()
         let encodedPasswordHash = auth.users.filter(u => u.username == "admin")[0].passwordHash
-        if isValidPassword(adminPassword, encodedPasswordHash):   
+        if isValidPassword(adminPassword, encodedPasswordHash):
           auth.users.delete(index)
           octolog.info "user has been removed"
           saveAuth(auth)

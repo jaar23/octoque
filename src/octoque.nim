@@ -1,6 +1,5 @@
-import server/[qserver, repl, auth], store/qtopic,
-  octolog, os, strutils, times, strformat,
-  argparse, threadpool, cpuinfo, terminal
+import server/[qserver, repl, auth], store/qtopic, octolog, os, strutils, times,
+    strformat, argparse, threadpool, cpuinfo, terminal
 
 const octoqueTitle = """
 -----------------------------------------------------
@@ -75,10 +74,10 @@ proc main() =
   var args = commandLineParams()
   var opts = serverOpts.parse(args)
 
-  ## administrative command
-  ## create, update and remove user
   if opts.adm.isSome:
-    octologStart("octoque.adm.log", skipInitLog = true, fmt="")
+    ## administrative command
+    ## create, update and remove user
+    octologStart("octoque.adm.log", skipInitLog = true, fmt = "")
     let adm = opts.adm.get
     if adm.create.isSome:
       var cru = adm.create.get
@@ -93,8 +92,8 @@ proc main() =
     octologStop(true)
     quit(0)
 
-  ## running the queue server
   elif opts.run.isSome:
+    ## running the queue server
     setControlCHook(graceExit)
     let run = opts.run.get
     var logfile = if run.logfile_opt.isSome: run.logfile else: now().format("yyyyMMddHHmm")
@@ -130,8 +129,8 @@ proc main() =
     server.start(numOfThread)
     octologStop()
 
-  ## running REPL mode
   elif opts.repl.isSome():
+    ## running REPL mode
     replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
 
 

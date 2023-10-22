@@ -174,7 +174,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         if qheader.command != CONNECT and not connected:
           server.decline(client, $UNAUTHORIZED_ACCESS)
 
-        if qheader.protocol != OTQ: raise newException(ProcessError, $NOT_IMPLEMENTED)
+        if qheader.protocol != OTQ: raise newException(ProcessError,
+            $NOT_IMPLEMENTED)
         if not server.queue.hasTopic(qheader.topic) and qheader.topic != "*" and
             qheader.command != NEW and qheader.command != CONNECT and
                 qheader.command != DISCONNECT:
