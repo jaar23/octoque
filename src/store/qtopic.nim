@@ -60,6 +60,7 @@ proc recv*(qtopic: ref QTopic): Option[string] =
 
 proc send*(qtopic: ref QTopic, data: string): void =
   debug &"{getThreadId()}.{qtopic.name} send to qchannel"
+  debug &"data size: {data.len}"
   qtopic.qchannel.send(data)
 
 
@@ -196,7 +197,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
           sleep(100)
         else:
           recvData = qtopic.store.popFirst()
-      #debug "recvData is " & recvData
+      debug "recvData length " & $recvData.len
       if recvData == "":
         sleep(100)
       else:

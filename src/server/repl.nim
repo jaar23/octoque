@@ -93,7 +93,7 @@ proc handleSubscribe(conn: var Socket) =
       else:
         handleResult(recvData)
     else:
-      conn.send("REPLPONG\n")
+      conn.send("REPLPONG\r\L")
   unsetControlCHook()
 
 
@@ -159,7 +159,7 @@ proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =
         return false
       commandHistory.add(connLine)
       conn = net.dial(serverAddr, Port(serverPort))
-      conn.send(connLine & "\n")
+      conn.send(connLine & "\r\L")
       var resp = conn.recvLine()
       if resp.strip() == "CONNECTED":
         handleResult(resp)
@@ -198,10 +198,11 @@ proc sendPayload(conn: var Socket, qheader: QHeader): void =
   if proceed.strip() == "PROCEED":
     for row in 0.uint8()..<qheader.payloadRows:
       stdoutData "data    > "
-      var dataLine = readLine(stdin)
+      var dataLine = ""
+      discard readLine(stdin, dataLine)
       if dataLine.toLowerAscii() == "quit":
         break
-      conn.send(dataLine & "\n")
+      conn.send(dataLine & "\r\L")
   else:
     handleDecline(proceed)
 
@@ -218,6 +219,8 @@ proc replExecutor(serverAddr: string, serverPort: int): void =
   echo "Welcome to octoque REPL. Type 'help' for list of "
   echo "available command, 'history' for display the commands "
   echo "has sent out."
+  echo "NOTE: only 4096 bytes will be read in REPL mode,"
+  echo "      sending data more than that will be truncated."
   echo "Type quit or Ctrl-C to exit octoque."
   echo ""
 

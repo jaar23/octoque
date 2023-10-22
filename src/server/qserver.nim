@@ -3,6 +3,8 @@ import message, errcode, auth
 import net, options, strutils, strformat, threadpool, sugar, sequtils
 import octolog
 
+# 4mb maximum 
+const MAX_CONNLINE_LENGTH = 4_000_000
 
 type
   QueueServer* = object
@@ -93,7 +95,7 @@ proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[
 proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
   if qheader.transferMethod == BATCH:
     for row in 0..<qheader.payloadRows.int():
-      let msg = client.recvLine()
+      let msg = client.recvLine(maxLength=MAX_CONNLINE_LENGTH)
       let stored = server.queue.enqueue(qheader.topic, msg)
       if stored.isSome and qheader.command == PUTACK:
         client.send("SUCCESS\n" & $stored.get)
