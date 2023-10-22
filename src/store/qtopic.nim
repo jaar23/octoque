@@ -185,7 +185,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
   try:
     spawn qsubs.run()
     #discard qsubs.ping()
-    sleep(1000)
+    sleep(100)
     while true:
       let pong = qsubs.ping()
       if not pong:
@@ -193,12 +193,12 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       var recvData = ""
       withLock storeLock:
         if qtopic.store.len == 0:
-          sleep(1000)
+          sleep(100)
         else:
           recvData = qtopic.store.popFirst()
-      debug "recvData is " & recvData
+      #debug "recvData is " & recvData
       if recvData == "":
-        sleep(1000)
+        sleep(100)
       else:
         withLock subscLock:
           if recvData != "":
