@@ -42,7 +42,7 @@ type
     topicSize*: int = 0
     connectionType*: ConnectionType = BROKER
     lifespan*: int = 0
-    numberofThread: uint = 2
+    numberofThread*: uint = 1
     username*: string
     password*: string
     #length*: uint32
@@ -151,9 +151,17 @@ proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
       raise newException(ParseError, "Missing connection type for new topic")
     result.connectionType = parseTopicConnectionType(lineArr[3])
     if lineArr.len > 4:
-      result.topicSize = lineArr[4].parseInt()
+      if lineArr[4].startsWith("T") or lineArr[4].startsWith("t"):
+        let numberOfThread = lineArr[4].substr(1, lineArr[4].len - 1)
+        result.numberofThread = numberOfThread.parseInt().uint()
+      else:
+        result.topicSize = lineArr[4].parseInt()
     if lineArr.len > 5:
-      result.numberofThread = lineArr[5].parseInt().uint()
+      if lineArr[5].startsWith("T") or lineArr[5].startsWith("t"):
+        let numberOfThread = lineArr[5].substr(1, lineArr[5].len - 1)
+        result.numberofThread = numberOfThread.parseInt().uint()
+      else:
+        raise newException(ParseError, "Invalid number of thread format, number always starts with T")
 
   if result.command == CONNECT:
     if lineArr.len < 3:

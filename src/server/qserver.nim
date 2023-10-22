@@ -135,14 +135,14 @@ proc unsubscribe(server: QueueServer, client: Socket, topicName: string): void =
 
 
 proc newtopic(server: QueueServer, client: Socket, topicName: string,
-    capacity: int, connectionType: ConnectionType): void =
+    capacity: int, connectionType: ConnectionType, numberOfThread: uint): void =
   var topic: ref QTopic
   if capacity > 0:
     topic = initQTopic(topicName, capacity, connectionType)
   else:
     topic = initQTopicUnlimited(topicName, connectionType)
   server.queue.addTopic(topic)
-  server.queue.startTopicListener(topic.name, 1)
+  server.queue.startTopicListener(topic.name, numberOfThread)
   client.send("SUCCESS\n")
 
 
@@ -210,7 +210,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TNew):
             server.proceed(client)
             server.newtopic(client, qheader.topic, qheader.topicSize,
-              qheader.connectionType)
+              qheader.connectionType, qheader.numberOfThread)
           else: unauthorized = true
         of DISPLAY:
           if server.proceedCheck(username, role, qheader.topic, TRead):

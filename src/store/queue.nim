@@ -119,7 +119,7 @@ proc startListener*(queue: ref Queue, numOfThread: int = 2): void =
 
 
 proc startTopicListener*(queue: ref Queue, topicName: string,
-    numOfThread: int = 2): void =
+    numOfThread: uint = 2): void =
   info(&"BROKER topic has {numOfThread} worker(s)")
   info(&"PUBSUB topic has 1 worker")
   let topic = queue.find(topicName)
@@ -173,7 +173,7 @@ proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
     error(getCurrentExceptionMsg())
 
 
-proc newQueue*(topicSize: uint8 = 8): ref Queue =
+proc newQueue*(topicSize: uint8 = 64): ref Queue =
   info("initialize new queue")
   var queue = (ref Queue)(state: QueueState.STARTED)
   queue.topics = newSeq[ref QTopic]()
@@ -182,7 +182,7 @@ proc newQueue*(topicSize: uint8 = 8): ref Queue =
 
 
 proc initQueue*(topicNames: varargs[string],
-                topicSize: uint8 = 8): ref Queue {.raises: QueueError.} =
+                topicSize: uint8 = 64): ref Queue {.raises: QueueError.} =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
   queue.topicSize = topicSize
@@ -196,7 +196,7 @@ proc initQueue*(topicNames: varargs[string],
 
 
 proc initQueue*(topics: varargs[ref QTopic],
-                topicSize: uint8 = 8): ref Queue {.raises: QueueError.} =
+                topicSize: uint8 = 64): ref Queue {.raises: QueueError.} =
   info("initialize new queue with topics")
   var queue = (ref Queue)(state: QueueState.STARTED)
   queue.topicSize = topicSize

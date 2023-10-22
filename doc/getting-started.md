@@ -48,6 +48,9 @@ you can place `octoque` binary to an excutable folder `(/usr/local/bin)` or addi
 ```
 ./octoque run
 ```
+Example
+
+![run and repl](./images/getting-started.png)
 
 view more option by running
 
@@ -64,7 +67,8 @@ view more option by running
 ## repl command
 ./octoque repl -h
 ```
+There are always two queue topic by default `default` and `pubsub`. `default` topic is running as a  BROKER connection type while `pubsub` is running as PUBSUB connection type.
 
+Find out more about [message structure](./message-structure.md)
 
-
-
+Find out more about [message command](./message-command.md)

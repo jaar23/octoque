@@ -1,6 +1,21 @@
-import server/[qserver, repl, auth], store/qtopic
-import octolog, os, strutils, times, strformat
-import argparse, threadpool, cpuinfo
+import server/[qserver, repl, auth], store/qtopic,
+  octolog, os, strutils, times, strformat,
+  argparse, threadpool, cpuinfo, terminal
+
+const octoqueTitle = """
+-----------------------------------------------------
+    ooo    ccc  ttttt   ooo    qqq    u   u  eeeee
+   o   o  c       t    o   o  q   q   u   u  e
+   o   o  c       t    o   o  q   q   u   u  eeeee
+   o   o  c       t    o   o  q q q   u   u  e
+    ooo    ccc    t     ooo    qq q    uuu   eeeee
+-----------------------------------------------------
+"""
+
+proc printTitle (msg: string) =
+  stdout.setForegroundColor(fgGreen)
+  stdout.write msg
+  stdout.resetAttributes()
 
 
 var serverOpts = newParser:
@@ -60,6 +75,8 @@ proc main() =
   var args = commandLineParams()
   var opts = serverOpts.parse(args)
 
+  ## administrative command
+  ## create, update and remove user
   if opts.adm.isSome:
     octologStart("octoque.adm.log", skipInitLog = true, fmt="")
     let adm = opts.adm.get
@@ -75,12 +92,18 @@ proc main() =
       removeUser(rmu.username, rmu.topic)
     octologStop(true)
     quit(0)
+
+  ## running the queue server
   elif opts.run.isSome:
     setControlCHook(graceExit)
     let run = opts.run.get
     var logfile = if run.logfile_opt.isSome: run.logfile else: now().format("yyyyMMddHHmm")
     var logconsole = not run.noconsolelogger
     if run.detach: logconsole = false
+
+    if logconsole:
+      printTitle(octoqueTitle)
+
     octologStart(filename = logfile, usefilelogger = not run.nofilelogger,
                  useconsolelogger = logconsole)
     ## 8 default
@@ -106,6 +129,8 @@ proc main() =
     var numOfThread = run.brokerthread.parseInt()
     server.start(numOfThread)
     octologStop()
+
+  ## running REPL mode
   elif opts.repl.isSome():
     replStart(opts.repl.get.address, opts.repl.get.port.parseInt())
 

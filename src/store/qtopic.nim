@@ -214,7 +214,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 
 proc initQTopic*(name: string, capacity: int,
     connType: ConnectionType = BROKER): ref QTopic =
-  var qtopic: ref QTopic = (ref QTopic)(name: name)
+  var qtopic: ref QTopic = (ref QTopic)(name: name, capacity: capacity)
   qtopic.qchannel.open()
   initCond storeCond
   initLock storeLock

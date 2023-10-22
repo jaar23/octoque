@@ -49,7 +49,7 @@
 
 - state of qtopic
 
-- check state of queue and qtopio before proceed 
+- check state of queue and qtopic before proceed 
 
 - octoque start with file config
 
