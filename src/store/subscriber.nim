@@ -62,6 +62,8 @@ proc close*(subscriber: ref Subscriber): void =
     return
   subscriber.disconnected = true
   subscriber.connection.close()
+  subscriber.channel.close()
+  subscriber.connection = nil
 
 
 proc ping*(subscriber: ref Subscriber): bool =
@@ -102,18 +104,22 @@ proc run*(subscriber: ref Subscriber) {.thread.} =
   info $subscriber
   defer:
     subscriber.close()
-    info &"{subscriber.runnerId()} exit run"
+    #info &"{subscriber.runnerId()} exit run"
   try:
-    while not subscriber.disconnected:
+    while not subscriber.disconnected and subscriber.connection != nil:
       if not subscriber.isDisconnected():
         # let pong = subscriber.ping()
         # if not pong:
+        debug "publishing..."
         #   break
         subscriber.publish()
       else:
         echo $subscriber
+        debug "exit subscription loop..."
         break
   except:
     error &"{subscriber.runnerId()} {getCurrentExceptionMsg()}"
-
+  finally:
+    info &"{subscriber.runnerId()} exited"
+    subscriber.close()
 

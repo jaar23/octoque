@@ -188,19 +188,21 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     #discard qsubs.ping()
     sleep(100)
     while true:
+      ## client should response to ping
+      ## in order to notify server they are still connected
       let pong = qsubs.ping()
       if not pong:
         break
       var recvData = ""
       withLock storeLock:
-        if qtopic.store.len == 0:
-          sleep(100)
-        else:
+        if qtopic.store.len != 0:
+          #sleep(10)
+        #else:
           recvData = qtopic.store.popFirst()
-      debug "recvData length " & $recvData.len
-      if recvData == "":
-        sleep(100)
-      else:
+      #debug "recvData length " & $recvData.len
+      if recvData != "":
+        #sleep(10)
+      #else:
         withLock subscLock:
           if recvData != "":
             #subscCond.wait(subscLock)

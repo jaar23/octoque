@@ -43,6 +43,8 @@
 
 ### version 0.2.0 (future)
 
+- protected mode, running without password authentication but accesible only via loopback interface.
+
 - message properties to handle extra header, such as lifespan of message, service level, etc.
 
 - state of queue

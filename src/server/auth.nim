@@ -49,7 +49,7 @@ proc initAuthFile(): void {.raises: AuthFileError.} =
       iterations: int = 3
       encodedHash: string = hashEncodePassword("password", iterations)
       adminUser = User(username: "admin", passwordHash: encodedHash,
-          role: "admin", topics: @["default"])
+          role: "admin", topics: @["default", "pubsub"])
       auth = Auth(roles: @[adminRole, userRole], users: @[adminUser])
     ## create if config folder is not exist
     discard existsOrCreateDir(authDir)

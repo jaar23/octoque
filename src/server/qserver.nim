@@ -73,7 +73,7 @@ proc decline(server: QueueServer, client: Socket, reason: string): void =
 
 
 proc endofresp(server: QueueServer, client: Socket): void =
-  client.send("ENDOFRESP\n")
+  client.send("ENDOFRESP\r\L")
 
 
 proc connect(server: QueueServer, client: Socket, qheader: QHeader): (string, bool) =
@@ -160,7 +160,10 @@ proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =
         client.send($topic & "\n")
         break
 
+
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
+  defer:
+    debug "exit from execution.."
   var connected = false
   var username = ""
   var role = ""
@@ -168,8 +171,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
     while true:
       var unauthorized = false
       let headerLine = client.recvLine()
-      info "incoming: " & headerLine
-      info "connected: " & $connected
+      info $getThreadId() & " incoming: " & headerLine
+      info $getThreadId() & " connected: " & $connected
       if headerLine.len != 0:
         let qheader = parseQHeader(headerLine)
         debug "qheader: " & $qheader
@@ -201,7 +204,11 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TRead):
             server.proceed(client)
             server.subscribe(client, qheader.topic)
+            client.close()
+            debug "subscription close"
+            break
           else: unauthorized = true
+          debug "{getThreadId()} exit from subscribe"
         of UNSUBSCRIBE: server.unsubscribe(client, qheader.topic)
         of PING: server.ping(client, qheader.topic)
         of CLEAR:
@@ -239,13 +246,17 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
 
         if unauthorized: server.decline(client, $UNAUTHORIZED_ACCESS)
 
+      else: 
+        break
       server.endofresp(client)
+
   except:
     let errMsg = getCurrentExceptionMsg()
     server.decline(client, errMsg)
   finally:
     info "session closed"
     client.close()
+    connected = false
 
 
 proc start*(server: QueueServer, numOfThread: int): void =

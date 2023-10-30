@@ -104,4 +104,7 @@ todo:
 
 [ ] documentation
 
-[ ] client library
+[p] client library
+
+[ ] remove disconnected connection
+

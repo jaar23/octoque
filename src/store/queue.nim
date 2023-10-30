@@ -134,11 +134,10 @@ proc startTopicListener*(queue: ref Queue, topicName: string,
 
 proc subscribe*(queue: ref Queue, topicName: string,
     connection: Socket): void {.raises: CatchableError.} =
-  defer:
-    info "synchronizing remaining threads"
-    sync()
-    info "thread synchronized"
-
+  #defer:
+    #info "synchronizing remaining threads"
+    #sync()
+    #info "thread synchronized"
   info(&"pubsub running on {getThreadId()}")
   var topic: Option[ref QTopic] = queue.find(topicName)
   var subscriber = newSubscriber(connection, $getThreadId())
@@ -160,7 +159,7 @@ proc subscribe*(queue: ref Queue, topicName: string,
   finally:
     if topic.isSome:
       info(&"{getThreadId()} exit thread")
-      topic.get.unsubscribe(subscriber)
+      #topic.get.unsubscribe(subscriber)
 
 
 proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
