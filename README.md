@@ -47,6 +47,21 @@ octoque command started with its own protocol, `otq`, it also has its own comand
 
 To try out, you can run `octoque repl` to start octoque in REPL mode, then you can run the command above in the terminal.
 
+### Running with podman / docker
+
+The image is available at quay.io/jaar23/octoque. 
+
+Running as octoque server
+
+```shell
+podman pull quay.io/jaar23/octoque:latest
+
+podman run -d -p 6789:6789 quay.io/jaar23/octoque:latest
+
+```
+
+Then, you can use the client library to connect octoque with your application, a quick example can refer [octoque_client](https://github.com/jaar23/octoque_client)
+
 [Getting started](./doc/getting-started.md)
 
 More documentation is coming soon.
