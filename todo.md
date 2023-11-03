@@ -106,5 +106,5 @@ todo:
 
 [p] client library
 
-[ ] remove disconnected connection
+[x] remove disconnected connection
 

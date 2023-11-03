@@ -65,7 +65,7 @@ proc proceedCheck(server: QueueServer, username, role, topic: string,
 
 
 proc proceed(server: QueueServer, client: Socket, message = "PROCEED"): void =
-  client.send(message & "\n")
+  client.send(message & "\r\L")
 
 
 proc decline(server: QueueServer, client: Socket, reason: string): void =
@@ -89,7 +89,7 @@ proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[
     string]]): void =
   if msgSeq.isSome and msgSeq.get.len > 0:
     for msg in msgSeq.get:
-      client.send(msg & "\n")
+      client.send(msg & "\r\L")
 
 
 proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
@@ -98,9 +98,9 @@ proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
       let msg = client.recvLine(maxLength=MAX_CONNLINE_LENGTH)
       let stored = server.queue.enqueue(qheader.topic, msg)
       if stored.isSome and qheader.command == PUTACK:
-        client.send("SUCCESS\n" & $stored.get)
+        client.send("SUCCESS\r\L" & $stored.get)
       elif stored.isNone and qheader.command == PUTACK:
-        client.send("FAIL\n" & $stored.get)
+        client.send("FAIL\r\L" & $stored.get)
   elif qheader.transferMethod == STREAM:
     echo "not implemented"
 
@@ -108,16 +108,16 @@ proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
 proc ping(server: QueueServer, client: Socket, topic: string): void =
   let topicOpt = server.queue.find(topic)
   if topicOpt.isSome:
-    client.send("PONG\n")
-  else: client.send("NOT FOUND\n")
+    client.send("PONG\r\L")
+  else: client.send("NOT FOUND\r\L")
 
 
 proc clear(server: QueueServer, client: Socket, qheader: QHeader): void =
   let cleared = server.queue.clearqueue(qheader.topic)
   if cleared.isSome and cleared.get:
-    client.send("CLEARED\n")
+    client.send("CLEARED\r\L")
   else:
-    client.send("FAIL\n")
+    client.send("FAIL\r\L")
 
 
 proc subscribe(server: QueueServer, client: Socket, topicName: string): void =
@@ -145,7 +145,7 @@ proc newtopic(server: QueueServer, client: Socket, topicName: string,
     topic = initQTopicUnlimited(topicName, connectionType)
   server.queue.addTopic(topic)
   server.queue.startTopicListener(topic.name, numberOfThread)
-  client.send("SUCCESS\n")
+  client.send("SUCCESS\r\L")
 
 
 proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =

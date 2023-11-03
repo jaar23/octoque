@@ -38,7 +38,7 @@ proc trySend*(subscriber: ref Subscriber, data: string): bool =
   if subscriber.disconnected:
     return false
   else:
-    debug "sending data >>>>" & data
+    #debug "sending data >>>>" & data
     let sent = subscriber.connection.trySend(data & "\n")
     if not sent:
       subscriber.disconnected = true
@@ -110,16 +110,16 @@ proc run*(subscriber: ref Subscriber) {.thread.} =
       if not subscriber.isDisconnected():
         # let pong = subscriber.ping()
         # if not pong:
-        debug "publishing..."
+        #debug "publishing..."
         #   break
         subscriber.publish()
       else:
         echo $subscriber
-        debug "exit subscription loop..."
+        debug "exit subscription loop"
         break
   except:
     error &"{subscriber.runnerId()} {getCurrentExceptionMsg()}"
   finally:
-    info &"{subscriber.runnerId()} exited"
+    info &"{subscriber.runnerId()} closing subscription"
     subscriber.close()
 

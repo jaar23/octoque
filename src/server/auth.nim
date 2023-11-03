@@ -52,6 +52,7 @@ proc initAuthFile(): void {.raises: AuthFileError.} =
           role: "admin", topics: @["default", "pubsub"])
       auth = Auth(roles: @[adminRole, userRole], users: @[adminUser])
     ## create if config folder is not exist
+    discard existsOrCreateDir(getHomeDir() & "/.config")
     discard existsOrCreateDir(authDir)
     var authYaml = newFileStream(authDir & authFile, fmWrite)
     Dumper().dump(auth, authYaml)

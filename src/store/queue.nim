@@ -149,7 +149,7 @@ proc subscribe*(queue: ref Queue, topicName: string,
       else:
         info($subscriber)
         topic.get.subscribe(subscriber)
-        info(&"{getThreadId()} exit...")
+        #info(&"{getThreadId()} exit...")
         subscriber.close()
     else:
       info(&"{topicName} not found")
@@ -158,7 +158,7 @@ proc subscribe*(queue: ref Queue, topicName: string,
     raise newException(CatchableError, getCurrentExceptionMsg())
   finally:
     if topic.isSome:
-      info(&"{getThreadId()} exit thread")
+      info(&"{getThreadId()} exit subscribe thread")
       #topic.get.unsubscribe(subscriber)
 
 

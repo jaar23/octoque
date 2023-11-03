@@ -40,6 +40,10 @@
 
 - client library to be used for develop application with octoque (work in progress).
 
+- github build
+
+- containerize
+
 
 ### version 0.2.0 (future)
 
