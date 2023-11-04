@@ -1,6 +1,6 @@
 ## Roadmap
 
-###  version 0.1.0 (current)
+###  version 0.1.0
 
 - octoque running in detach mode
 
@@ -38,14 +38,11 @@
 
 - in-memory store.
 
-- client library to be used for develop application with octoque (work in progress).
+- client library to be used for develop application with octoque (work in progress) [octoque_client](https://github.com/jaar23/octoque_client)
 
-- github build
+- containerize [quay.io/jaar23/octoque:latest](https://quay.io/repository/jaar23/octoque)
 
-- containerize
-
-
-### version 0.2.0 (future)
+### version 0.2.0 (current work in progress)
 
 - protected mode, running without password authentication but accesible only via loopback interface.
 
@@ -60,6 +57,8 @@
 - octoque start with file config
 
 - schema based qtopic
+
+- binary release
 
 ### version 0.3.0 (future)
 
