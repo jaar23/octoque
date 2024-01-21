@@ -3,7 +3,8 @@ import net
 import strformat
 import octolog
 
-
+# TODO: adding subscriber specified detail
+# ip_addr, deq.log
 type
   Subscriber* = object
     threadId*: string
@@ -34,6 +35,7 @@ proc notify*(subscriber: ref Subscriber): void =
   subscriber.connection.send("1\n")
 
 
+# TODO: connection to recvline in order to ack message
 proc trySend*(subscriber: ref Subscriber, data: string): bool =
   if subscriber.disconnected:
     return false

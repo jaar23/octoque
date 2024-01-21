@@ -172,6 +172,15 @@ proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
     error(getCurrentExceptionMsg())
 
 
+proc acknowledge*(queue: ref Queue, topicName: string, messageId: string): void =
+  var topic: Option[ref QTopic] = queue.find(topicName)
+  try:
+    if topic.isSome:
+      topic.get.delivered(messageId)
+  except:
+    error(getCurrentExceptionMsg())
+
+
 proc newQueue*(topicSize: uint8 = 64): ref Queue =
   info("initialize new queue")
   var queue = (ref Queue)(state: QueueState.STARTED)
@@ -189,8 +198,11 @@ proc initQueue*(topicNames: varargs[string],
     raise newException(QueueError, $EXCEED_ALLOWED_TOPIC &
         " maximum topic size is " & $topicSize)
   for name in items(topicNames):
-    var topic = qtopic.initQTopicUnlimited(name)
-    queue.addTopic(topic)
+    try:
+      var topic = qtopic.initQTopicUnlimited(name)
+      queue.addTopic(topic)
+    except:
+      error(getCurrentExceptionMsg())
   return queue
 
 

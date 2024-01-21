@@ -1,10 +1,12 @@
 import options, net, locks, strformat, sequtils, sugar, os
-import std/enumerate, std/deques
+import std/enumerate, std/deques, std/times, std/base64
 import subscriber
 import uuid4
 import threadpool
 import octolog
 import segfaults
+import qmessage
+
 
 var
   storeLock: Lock
@@ -19,10 +21,13 @@ type
   QTopic* = object
     name: string
     qchannel: Channel[string]
-    store {.guard: storeLock.}: Deque[string]
+    store {.guard: storeLock.}: Deque[ref QMessage]
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
     capacity: int
+    qfile: File
+    deqfile: File
+    base64Encoded: bool
 
 
 proc name*(qtopic: ref QTopic): string =
@@ -33,14 +38,25 @@ proc connectionType*(qtopic: ref QTopic): ConnectionType =
   qtopic.topicConnectionType
 
 
+proc deqlog*(qtopic: ref QTopic, messageId: string): void = 
+  qtopic.deqfile.write(&"ACK {$messageId} {$getTime().toUnixFloat()}\r\n")
+  qtopic.deqfile.flushFile()
+
+
+proc enqlog*(qtopic: ref QTopic, line: string): void =
+  qtopic.qfile.write(line)
+  qtopic.qfile.flushFile()
+
+
 proc storeData (qtopic: ref QTopic, data: string): void =
   defer:
     storeCond.signal()
   withLock storeLock:
     if qtopic == nil:
-      #debug "!!! waiting qtopic to store new data !!!!"
       storeCond.wait(storeLock)
-    qtopic.store.addLast(data)
+    let qmsg = newQMessage(qtopic.name, data, qtopic.base64Encoded)
+    qtopic.store.addLast(qmsg)
+    qtopic.enqlog(qmsg.toJSON() & "\r\n")
     debug "store new data into " & qtopic.name
 
 
@@ -48,32 +64,49 @@ proc recv*(qtopic: ref QTopic): Option[string] =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    #debug "!!! waiting qtopic to recv!!!!"
     storeCond.wait(storeLock)
   withLock storeLock:
     if qtopic.store.len == 0:
       return none(string)
     else:
-      let recvData = qtopic.store.popFirst()
-      return some(recvData)
+      try:
+        let recvMsg = qtopic.store.popFirst()
+        return some(recvMsg.deqMessage())
+      except:
+        error &"{getThreadId()}.{qtopic.name} failed to dequeue"
+        error getCurrentExceptionMsg()
 
 
 proc send*(qtopic: ref QTopic, data: string): void =
   debug &"{getThreadId()}.{qtopic.name} send to qchannel"
   debug &"data size: {data.len}"
-  qtopic.qchannel.send(data)
+  try:
+    if qtopic.base64Encoded: 
+      qtopic.qchannel.send(encode(data))
+    else:
+      qtopic.qchannel.send(data)
+  except:
+    error &"{getThreadId()}.{qtopic.name} failed to enqueue"
+    error getCurrentExceptionMsg()
 
 
 proc clear*(qtopic: ref QTopic): bool =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    #debug "!!! waiting qtopic to clear msg !!!!"
     storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} clear message"
   withLock storeLock:
     qtopic.store.clear()
     return qtopic.store.len == 0
+
+
+proc commit*(qtopic: ref QTopic): void =
+  qtopic.qfile.flushFile()
+
+
+proc delivered*(qtopic: ref QTopic, messageId: string): void =
+  qtopic.deqlog(messageId)
 
 
 proc listen*(qtopic: ref QTopic): void {.thread.} =
@@ -82,7 +115,7 @@ proc listen*(qtopic: ref QTopic): void {.thread.} =
   info &"{getThreadId()}.{qtopic.name} listening"
   while true:
     let recvData = qtopic.qchannel.recv()
-    debug $getThreadId() & "." & qtopic.name & " store new message, " & recvData
+    debug $getThreadId() & "." & qtopic.name & " store new message, " & $recvData.len
     if qtopic == nil:
       storeCond.wait(storeLock)
     qtopic.storeData(recvData)
@@ -92,7 +125,6 @@ proc size*(self: ref QTopic): int =
   defer:
     storeCond.signal()
   if self == nil:
-    #debug "!!! waiting queue topic !!!"
     storeCond.wait(storeLock)
   withLock storeLock:
     debug "store len: " & $self.store.len
@@ -103,17 +135,12 @@ proc publish*(qtopic: ref QTopic, data: string): void =
   defer:
     storeCond.signal()
   if qtopic == nil:
-    #debug "!!!! waiting qtopic to publish !!!"
     storeCond.wait(storeLock)
   info &"{getThreadId()}.{qtopic.name} publish to subscriber"
   withLock subscLock:
     try:
       for s in qtopic.subscriptions.filter(s => not s.isDisconnected()):
-        #let pong = s.ping()
-        #if pong:
         discard s.trySend(&"{data}\n")
-        #else:
-        #  s.close()
     except:
       error &"{getThreadId()}.{qtopic.name} failed to send data"
       error getCurrentExceptionMsg()
@@ -124,7 +151,6 @@ proc unsubscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     subscCond.signal()
     storeCond.signal()
   if qtopic == nil:
-    #debug "!!! waiting qtopic to unsubscribe!!!"
     subscCond.wait(subscLock)
     storeCond.wait(storeLock)
   withLock subscLock:
@@ -170,7 +196,6 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
     subscCond.signal()
     storeCond.signal()
   if qtopic == nil:
-    #debug "!!! waiting qtopic to subscribe !!!!"
     subscCond.wait(subscLock)
     storeCond.wait(storeLock)
   var qsubs: ref Subscriber
@@ -196,13 +221,9 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       var recvData = ""
       withLock storeLock:
         if qtopic.store.len != 0:
-          #sleep(10)
-        #else:
-          recvData = qtopic.store.popFirst()
-      #debug "recvData length " & $recvData.len
+          let  recvMsg = qtopic.store.popFirst()
+          recvData = recvMsg.data()
       if recvData != "":
-        #sleep(10)
-      #else:
         withLock subscLock:
           if recvData != "":
             #subscCond.wait(subscLock)
@@ -219,27 +240,60 @@ proc initQTopic*(name: string, capacity: int,
     connType: ConnectionType = BROKER): ref QTopic =
   var qtopic: ref QTopic = (ref QTopic)(name: name, capacity: capacity)
   qtopic.qchannel.open()
+  let queueFileName = &"otq-{name}-enq.log"
+  let dequeueFileName = &"otq-{name}-deq.log"
+  if not os.fileExists(queueFileName):
+    var file = open(queueFileName, fmWrite)
+    file.close()
+    qtopic.qfile = open(queueFileName, fmAppend)
+  else: 
+    qtopic.qfile = open(queueFileName, fmAppend)
+
+  if not os.fileExists(dequeueFileName):
+    var file = open(dequeueFileName, fmWrite)
+    file.close()
+    qtopic.deqfile = open(dequeueFileName, fmAppend)
+  else: 
+    qtopic.deqfile = open(dequeueFileName, fmAppend)
+
   initCond storeCond
   initLock storeLock
   initCond subscCond
   initLock subscLock
   withLock storeLock:
     qtopic.topicConnectionType = connType
-    qtopic.store = initDeque[string]()
+    qtopic.store = initDeque[ref QMessage]()
   withLock subscLock:
     qtopic.subscriptions = newSeq[ref Subscriber]()
   return qtopic
+
 
 proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref QTopic =
   var qtopic: ref QTopic = (ref QTopic)(name: name)
   qtopic.topicConnectionType = connType
   qtopic.qchannel.open()
+  let queueFileName = &"otq-{name}-enq.log"
+  let dequeueFileName = &"otq-{name}-deq.log"
+  if not os.fileExists(queueFileName):
+    var file = open(queueFileName, fmWrite)
+    file.close()
+    qtopic.qfile = open(queueFileName, fmAppend)
+  else: 
+    qtopic.qfile = open(queueFileName, fmAppend)
+
+  if not os.fileExists(dequeueFileName):
+    var file = open(dequeueFileName, fmWrite)
+    file.close()
+    qtopic.deqfile = open(dequeueFileName, fmAppend)
+  else: 
+    qtopic.deqfile = open(dequeueFileName, fmAppend)
+
   initCond storeCond
   initLock storeLock
   initCond subscCond
   initLock subscLock
   withLock storeLock:
-    qtopic.store = initDeque[string]()
+    qtopic.store = initDeque[ref QMessage]()
   withLock subscLock:
     qtopic.subscriptions = newSeq[ref Subscriber]()
   return qtopic

@@ -8,7 +8,7 @@
 ##
 ## ===============================================
 
-import net, strutils, terminal, message
+import net, strutils, terminal, message, json, strformat
 
 
 var connected = false
@@ -77,6 +77,13 @@ proc handleQuit() =
   quit(0)
 
 
+proc handleAck(conn: Socket, resp: string) =
+  let jsonData = parseJson(resp)
+  let id = jsonData["id"].getInt(000)
+  let topic = jsonData["topic"].getStr("-")
+  conn.send(&"OTQ {$ACKNOWLEDGE} {topic} {$id}\r\L")
+
+
 proc handleSubscribe(conn: var Socket) =
   proc handleCtrlC() {.noconv.} =
     handleQuit()
@@ -90,8 +97,12 @@ proc handleSubscribe(conn: var Socket) =
         handleDecline(recvData)
       elif recvData.strip().endsWith("ENDOFRESP"):
         return
+      elif recvData.strip() == "PROCEED":
+        continue
       else:
         handleResult(recvData)
+        #if not recvData.startsWith("PROCEED"):
+        #  handleAck(conn, recvData)
     else:
       conn.send("REPLPONG\r\L")
   unsetControlCHook()
@@ -144,6 +155,8 @@ proc readResult(conn: Socket) =
         continue
       else:
         handleResult(dataResp)
+        if dataResp != "\r\L":
+          handleAck(conn, dataResp)
 
 
 proc acqConn(conn: var Socket, serverAddr: string, serverPort: int): bool =

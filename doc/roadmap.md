@@ -44,15 +44,17 @@
 
 ### version 0.2.0 (current work in progress)
 
-- protected mode, running without password authentication but accesible only via loopback interface.
-
-- message properties to handle extra header, such as lifespan of message, service level, etc.
+- persist queue by using append only file.
 
 - state of queue
 
 - state of qtopic
 
 - check state of queue and qtopic before proceed 
+
+- message properties to handle extra header, such as lifespan of message, service level, etc.
+
+- protected mode, running without password authentication but accesible only via loopback interface.
 
 - octoque start with file config
 

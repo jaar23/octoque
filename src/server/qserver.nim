@@ -161,6 +161,12 @@ proc listtopic(server: QueueServer, client: Socket, qheader: QHeader): void =
         break
 
 
+proc acknowledge(server: QueueServer, qheader: QHeader): void =
+  let topicName = qheader.topic
+  debug "message ack " & $qheader.messageId
+  server.queue.acknowledge(topicName, qheader.messageId)
+
+
 proc execute(server: QueueServer, client: Socket): void {.thread.} =
   defer:
     debug "exit from execution.."
@@ -215,7 +221,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TClear):
             server.proceed(client)
             server.clear(client, qheader)
-          else: unauthorized = true
+          else: unauthorized = true 
         of NEW:
           if server.proceedCheck(username, role, qheader.topic, TNew):
             server.proceed(client)
@@ -227,7 +233,9 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
             server.proceed(client)
             server.listtopic(client, qheader)
           else: unauthorized = true
-        of ACKNOWLEDGE: server.proceed(client, "ACKNOWLEDGE")
+        of ACKNOWLEDGE:
+          server.acknowledge(qheader)
+          #server.proceed(client, "ACKNOWLEDGE")
         of CONNECT:
           let (r, authenticated) = server.connect(client, qheader)
           if not authenticated:
@@ -252,6 +260,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
 
   except:
     let errMsg = getCurrentExceptionMsg()
+    error errMsg
     server.decline(client, errMsg)
   finally:
     info "session closed"
