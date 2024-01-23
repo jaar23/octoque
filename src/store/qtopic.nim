@@ -38,7 +38,7 @@ proc connectionType*(qtopic: ref QTopic): ConnectionType =
   qtopic.topicConnectionType
 
 
-proc deqlog*(qtopic: ref QTopic, messageId: string): void = 
+proc deqlog*(qtopic: ref QTopic, messageId: string): void =
   qtopic.deqfile.write(&"ACK {$messageId} {$getTime().toUnixFloat()}\r\n")
   qtopic.deqfile.flushFile()
 
@@ -81,7 +81,7 @@ proc send*(qtopic: ref QTopic, data: string): void =
   debug &"{getThreadId()}.{qtopic.name} send to qchannel"
   debug &"data size: {data.len}"
   try:
-    if qtopic.base64Encoded: 
+    if qtopic.base64Encoded:
       qtopic.qchannel.send(encode(data))
     else:
       qtopic.qchannel.send(data)
@@ -221,7 +221,7 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       var recvData = ""
       withLock storeLock:
         if qtopic.store.len != 0:
-          let  recvMsg = qtopic.store.popFirst()
+          let recvMsg = qtopic.store.popFirst()
           recvData = recvMsg.data()
       if recvData != "":
         withLock subscLock:
@@ -246,14 +246,14 @@ proc initQTopic*(name: string, capacity: int,
     var file = open(queueFileName, fmWrite)
     file.close()
     qtopic.qfile = open(queueFileName, fmAppend)
-  else: 
+  else:
     qtopic.qfile = open(queueFileName, fmAppend)
 
   if not os.fileExists(dequeueFileName):
     var file = open(dequeueFileName, fmWrite)
     file.close()
     qtopic.deqfile = open(dequeueFileName, fmAppend)
-  else: 
+  else:
     qtopic.deqfile = open(dequeueFileName, fmAppend)
 
   initCond storeCond
@@ -278,14 +278,14 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
     var file = open(queueFileName, fmWrite)
     file.close()
     qtopic.qfile = open(queueFileName, fmAppend)
-  else: 
+  else:
     qtopic.qfile = open(queueFileName, fmAppend)
 
   if not os.fileExists(dequeueFileName):
     var file = open(dequeueFileName, fmWrite)
     file.close()
     qtopic.deqfile = open(dequeueFileName, fmAppend)
-  else: 
+  else:
     qtopic.deqfile = open(dequeueFileName, fmAppend)
 
   initCond storeCond

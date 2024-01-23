@@ -149,7 +149,6 @@ proc subscribe*(queue: ref Queue, topicName: string,
       else:
         info($subscriber)
         topic.get.subscribe(subscriber)
-        #info(&"{getThreadId()} exit...")
         subscriber.close()
     else:
       info(&"{topicName} not found")
@@ -172,7 +171,8 @@ proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
     error(getCurrentExceptionMsg())
 
 
-proc acknowledge*(queue: ref Queue, topicName: string, messageId: string): void =
+proc acknowledge*(queue: ref Queue, topicName: string,
+    messageId: string): void =
   var topic: Option[ref QTopic] = queue.find(topicName)
   try:
     if topic.isSome:

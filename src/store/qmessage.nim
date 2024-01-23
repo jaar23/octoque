@@ -11,7 +11,7 @@ type
     base64Encoded: bool
 
 
-proc toJSON*(qmsg: ref QMessage): string = 
+proc toJSON*(qmsg: ref QMessage): string =
   return $$qmsg[]
 
 
@@ -20,23 +20,24 @@ proc deqMessage*(qmsg: ref QMessage): string =
   return qmsg.toJSON()
 
 
-proc length* (qmsg: ref QMessage): int = qmsg.length
+proc length*(qmsg: ref QMessage): int = qmsg.length
 
 
-proc data* (qmsg: ref QMessage): string = qmsg.data
+proc data*(qmsg: ref QMessage): string = qmsg.data
 
 
-proc newQMessage*(topic: string, data: string, base64Encode: bool): ref QMessage =
+proc newQMessage*(topic: string, data: string,
+    base64Encode: bool): ref QMessage =
   let length = data.len
   let queueDateTime = getTime().toUnixFloat()
   let id = getTime().toUnix()
   var qdata = if base64Encode: encode(data) else: data
   var qmsg: ref QMessage = (ref QMessage)(
-    id: id, 
-    topic: topic, 
-    data: qdata, 
-    queueDateTime: queueDateTime, 
-    length: length, 
+    id: id,
+    topic: topic,
+    data: qdata,
+    queueDateTime: queueDateTime,
+    length: length,
     dequeueDateTime: 0
   )
   return qmsg
