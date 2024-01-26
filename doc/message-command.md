@@ -213,7 +213,7 @@ OTQ NEW topic5 BROKER 500 T2
 
 `PUBLISH`
 
-put message to multiple queue topic (work in progress)
+put message to multiple queue topic, refers to the put method
 
 
 Find out more about [message structure](./message-structure.md)

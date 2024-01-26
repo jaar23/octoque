@@ -1,5 +1,5 @@
 import server/[qserver, repl, auth], store/[qtopic, storage_manager as storage],
-       octolog, os, strutils, times, strformat, argparse, threadpool, 
+       octolog, os, strutils, times, strformat, argparse, threadpool,
        cpuinfo, terminal
 
 
@@ -25,14 +25,16 @@ var serverOpts = newParser:
     flag("-nc", "--noconsolelogger", help = "start server without logging to console")
     flag("-nf", "--nofilelogger", help = "start server without logging to file")
     option("-a", "--address", default = some("0.0.0.0"),
-        help = "server address")
+          help = "server address")
     option("-p", "--port", default = some("6789"), help = "server port")
     option("-b", "--brokerthread", default = some("1"),
           help = "listener thread for queue with broker type")
     option("-c", "--configfile", help = "configuration file")
     option("-l", "--logfile", help = "log file name, you can define the file path here too")
     option("-t", "--max-topic", default = some("8"),
-        help = "maximum topic running on this queue server, default is 8")
+          help = "maximum topic running on this queue server, default is 8")
+    option("-m", "--mode", help = "mode of running, in-memory, disk", 
+           default = some("in-memory"))
   flag("-s", "--status", help = "check octoque running status")
   command("repl"):
     option("-a", "--address", default = some("0.0.0.0"),
@@ -71,7 +73,7 @@ proc graceExit() {.noconv.} =
   # octologStop()
   # storage.manager.stop()
   echo "\noctoque is terminated\n"
-  quit(0) 
+  quit(0)
 
 
 ## TODO: init from config file
@@ -111,8 +113,10 @@ proc main() =
 
     octologStart(filename = logfile, usefilelogger = not run.nofilelogger,
                  useconsolelogger = logconsole)
-    
-    storageManager.manager.start()
+    if run.mode.toLowerAscii() == "disk":
+      storageManager.manager.start()
+    else:
+      storageManager.manager.disable()
 
     ## 8 default
     ## 1 for main thread

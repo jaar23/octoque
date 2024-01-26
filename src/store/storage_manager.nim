@@ -7,7 +7,7 @@ type
   StorageOps* = enum
     QUEUE, CONSUMED, CLEANUP
   StorageState* = enum
-    RUNNING, STOPPING, STOP
+    RUNNING, STOPPING, STOP, DISABLED
   Parcel* = object
     messageId: int
     topic: string
@@ -206,7 +206,7 @@ proc addTopic*(sm: ref StorageManager, topics: seq[string]): void =
 
 
 proc parcelCollector*(sm: ref StorageManager) {.thread.} =
-  info "parcel collector started"
+  info "storage manager is running, parcel collector started"
   try:
     while sm.state != STOP:
       let parcel = storageChannel.recv()
@@ -255,8 +255,16 @@ proc stop*(sm: ref StorageManager): void =
   storageChannel.close()
 
 
+proc disable*(sm: ref StorageManager): void =
+  sm.state = DISABLED
+  storageChannel.close()
+  info &"storage manager is disabled, octoque running in in-memory mode"
+
+
 proc sendParcel*(sm: ref StorageManager, parcel: Parcel): void =
   try:
+    if sm.state == DISABLED:
+      return
     if sm.state != RUNNING:
       raise newException(ParcelError, "storage manager is not running")
     let sent = storageChannel.trySend(parcel)
