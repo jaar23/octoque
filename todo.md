@@ -89,7 +89,7 @@ todo:
 
 [ ] persistent store
 
-[ ] replay queue based on log
+[ ] replay queue based on log / persistent data
 
 [ ] monitoring
 
@@ -104,7 +104,8 @@ todo:
 
 [ ] documentation
 
-[p] client library
+[x] client library
 
 [x] remove disconnected connection
 
+[ ] commit by request, log by request or config

@@ -45,7 +45,7 @@ type
     numberofThread*: uint = 1
     username*: string
     password*: string
-    messageId*: string
+    messageId*: int
     #length*: uint32
     # keepAlive*: uint32
 
@@ -172,7 +172,7 @@ proc parseQHeader*(line: string): QHeader {.raises: [ParseError, ValueError].} =
 
   if result.command == ACKNOWLEDGE:
     if lineArr.len >= 3:
-      result.messageId = lineArr[3]
+      result.messageId = lineArr[3].parseInt()
   # long running connection required keep alive
   # TODO: evaluate if long running connection is required
   # result.keepAlive = lineArr[3].parseInt().uint32()

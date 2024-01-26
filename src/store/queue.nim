@@ -172,7 +172,7 @@ proc unsubscribe*(queue: ref Queue, topicName: string, connId: string): void =
 
 
 proc acknowledge*(queue: ref Queue, topicName: string,
-    messageId: string): void =
+    messageId: int): void =
   var topic: Option[ref QTopic] = queue.find(topicName)
   try:
     if topic.isSome:

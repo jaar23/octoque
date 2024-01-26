@@ -81,6 +81,7 @@ proc handleAck(conn: Socket, resp: string) =
   let jsonData = parseJson(resp)
   let id = jsonData["id"].getInt(000)
   let topic = jsonData["topic"].getStr("-")
+  #echo "sending ack back"
   conn.send(&"OTQ {$ACKNOWLEDGE} {topic} {$id}\r\L")
 
 
@@ -102,8 +103,9 @@ proc handleSubscribe(conn: var Socket) =
       else:
         handleResult(recvData)
         #if not recvData.startsWith("PROCEED"):
-        #  handleAck(conn, recvData)
+        handleAck(conn, recvData)
     else:
+      #echo "repl ping....."
       conn.send("REPLPONG\r\L")
   unsetControlCHook()
 

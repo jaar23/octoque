@@ -1,11 +1,6 @@
-import options, net, locks, strformat, sequtils, sugar, os
+import options, net, locks, strformat, sequtils, sugar, os, threadpool
 import std/enumerate, std/deques, std/times, std/base64
-import subscriber
-import uuid4
-import threadpool
-import octolog
-import segfaults
-import qmessage
+import uuid4, octolog, qmessage, subscriber, storage_manager
 
 
 var
@@ -21,14 +16,15 @@ type
   QTopic* = object
     name: string
     qchannel: Channel[string]
-    store {.guard: storeLock.}: Deque[ref QMessage]
-    subscriptions {.guard: subscLock.}: seq[ref Subscriber]
-    topicConnectionType: ConnectionType
     capacity: int
     qfile: File
     deqfile: File
     base64Encoded: bool
-
+    subscriptions {.guard: subscLock.}: seq[ref Subscriber]
+    topicConnectionType: ConnectionType
+    store {.guard: storeLock.}: Deque[ref QMessage]
+    #storageManager: ref StorageManager
+   
 
 proc name*(qtopic: ref QTopic): string =
   qtopic.name
@@ -54,9 +50,23 @@ proc storeData (qtopic: ref QTopic, data: string): void =
   withLock storeLock:
     if qtopic == nil:
       storeCond.wait(storeLock)
-    let qmsg = newQMessage(qtopic.name, data, qtopic.base64Encoded)
+    let queueDateTime = getTime().toUnixFloat()
+    # if qtopic.connectionType != PUBSUB:
+      # let id = qtopic.storageManager.saveQueueData(data, queueDateTime,
+      #     qtopic.base64Encoded, "")
+    let id = queueDateTime.toInt()
+    let qmsg = newQMessageRef(id, qtopic.name, data, queueDateTime,
+        qtopic.base64Encoded)
+    {.cast(gcsafe).}:
+      let parcel = newParcel(id, qtopic.name, qmsg[], QUEUE)
+      storageManager.manager.sendParcel(parcel)
     qtopic.store.addLast(qmsg)
-    qtopic.enqlog(qmsg.toJSON() & "\r\n")
+    # else:
+    #  let qmsg = newQMessageRef(0, qtopic.name, data, queueDateTime,
+    #      qtopic.base64Encoded)
+    #  qtopic.store.addLast(qmsg)
+    #  AOF
+    # qtopic.enqlog(qmsg.toJSON() & "\r\n")
     debug "store new data into " & qtopic.name
 
 
@@ -105,8 +115,15 @@ proc commit*(qtopic: ref QTopic): void =
   qtopic.qfile.flushFile()
 
 
-proc delivered*(qtopic: ref QTopic, messageId: string): void =
-  qtopic.deqlog(messageId)
+proc delivered*(qtopic: ref QTopic, messageId: int): void =
+  # AOR
+  # qtopic.deqlog(messageId)
+  debug "update queue data consumption status"
+  {.cast(gcsafe).}:
+    let parcel = newParcel(messageId, qtopic.name, CONSUMED)
+    storageManager.manager.sendParcel(parcel)
+  # let updatedRows = qtopic.storageManager.consumedQueueData(messageId)
+  # debug &"{updatedRows} is consumed"
 
 
 proc listen*(qtopic: ref QTopic): void {.thread.} =
@@ -131,7 +148,9 @@ proc size*(self: ref QTopic): int =
     return self.store.len
 
 
-proc publish*(qtopic: ref QTopic, data: string): void =
+## currently not in use
+## check out subscribe function
+proc publish*(qtopic: ref QTopic, data: string, clientIp: string): void =
   defer:
     storeCond.signal()
   if qtopic == nil:
@@ -140,7 +159,11 @@ proc publish*(qtopic: ref QTopic, data: string): void =
   withLock subscLock:
     try:
       for s in qtopic.subscriptions.filter(s => not s.isDisconnected()):
-        discard s.trySend(&"{data}\n")
+        let queuedDateTime = getTime().toUnixFloat()
+        let id = queuedDateTime.toInt()
+        # let id = qtopic.storageManager.saveQueueData(data, queuedDateTime, qtopic.base64Encoded, clientIp)
+        let qmsg = newQMessageRef(id, qtopic.name, data, queuedDateTime, qtopic.base64Encoded)
+        discard s.trySend(&"{qmsg.toJSON()}\n")
     except:
       error &"{getThreadId()}.{qtopic.name} failed to send data"
       error getCurrentExceptionMsg()
@@ -218,18 +241,34 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       let pong = qsubs.ping()
       if not pong:
         break
-      var recvData = ""
-      withLock storeLock:
-        if qtopic.store.len != 0:
-          let recvMsg = qtopic.store.popFirst()
-          recvData = recvMsg.data()
-      if recvData != "":
-        withLock subscLock:
-          if recvData != "":
-            #subscCond.wait(subscLock)
-            for sbr in qtopic.subscriptions:
-              sbr.push(recvData)
-            subscCond.signal()
+      # var recvData = ""
+      # var queuedDateTime = 0.0
+      # withLock storeLock:
+      #   if qtopic.store.len != 0:
+      #     let recvMsg = qtopic.store.popFirst()
+      #     recvData = recvMsg.data()
+      #     queuedDateTime = recvMsg.queuedDateTime()
+      # if recvData != "":
+      withLock subscLock:
+        # if recvData != "":
+        #   subscCond.wait(subscLock)
+        for sbr in qtopic.subscriptions:
+          # let id = qtopic.storageManager.saveQueueData(recvData, queuedDateTime, 
+          #                                              qtopic.base64Encoded, sbr.connectionIp)
+          # let id = queuedDateTime.toInt()
+          # let qmsg = newQMessageRef(id, qtopic.name, recvData, queuedDateTime, 
+          #                           qtopic.base64Encoded)
+          # let parcel = newParcel(id, qtopic.name, qmsg[], QUEUE)
+          # storageManager.manager.sendParcel(parcel)
+          withLock storeLock:
+            if qtopic.store.len != 0:
+              let recvMsg = qtopic.store.popFirst()
+              sbr.push(recvMsg.toJSON())
+              # let sent = sbr.trySend(recvMsg.toJSON())
+              # if not sent:
+              #   qtopic.store.addLast(recvMsg)
+            storeCond.signal()
+        subscCond.signal()
   except:
     error &"{getThreadId()}.{qtopic.name} {getCurrentExceptionMsg()}"
   finally:
@@ -255,6 +294,9 @@ proc initQTopic*(name: string, capacity: int,
     qtopic.deqfile = open(dequeueFileName, fmAppend)
   else:
     qtopic.deqfile = open(dequeueFileName, fmAppend)
+  #qtopic.storageManager = initStorage(name)
+  {.cast(gcsafe).}:
+    storageManager.manager.addTopic(@[name])
 
   initCond storeCond
   initLock storeLock
@@ -287,6 +329,9 @@ proc initQTopicUnlimited*(name: string, connType: ConnectionType = BROKER): ref 
     qtopic.deqfile = open(dequeueFileName, fmAppend)
   else:
     qtopic.deqfile = open(dequeueFileName, fmAppend)
+  #qtopic.storageManager = initStorage(name)
+  {.cast(gcsafe).}:
+    storageManager.manager.addTopic(@[name])
 
   initCond storeCond
   initLock storeLock

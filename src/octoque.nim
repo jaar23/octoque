@@ -1,5 +1,7 @@
-import server/[qserver, repl, auth], store/qtopic, octolog, os, strutils, times,
-    strformat, argparse, threadpool, cpuinfo, terminal
+import server/[qserver, repl, auth], store/[qtopic, storage_manager as storage],
+       octolog, os, strutils, times, strformat, argparse, threadpool, 
+       cpuinfo, terminal
+
 
 const octoqueTitle = """
 -----------------------------------------------------
@@ -59,18 +61,22 @@ var serverOpts = newParser:
   help("{prog} is a simple queue system with broker and pubsub implementation.")
 
 
+## exitting program
 proc graceExit() {.noconv.} =
   # sync()
   # stop all subscriber
   # stop all topic
   # stop queue manager
   # join all threads
+  # octologStop()
+  # storage.manager.stop()
   echo "\noctoque is terminated\n"
-  quit(0)
+  quit(0) 
 
 
 ## TODO: init from config file
 proc main() =
+
   var args = commandLineParams()
   var opts = serverOpts.parse(args)
 
@@ -105,6 +111,9 @@ proc main() =
 
     octologStart(filename = logfile, usefilelogger = not run.nofilelogger,
                  useconsolelogger = logconsole)
+    
+    storageManager.manager.start()
+
     ## 8 default
     ## 1 for main thread
     ## 1 for logging
@@ -128,7 +137,6 @@ proc main() =
     var numOfThread = run.brokerthread.parseInt()
     server.start(numOfThread)
     octologStop()
-
   elif opts.repl.isSome():
     ## running REPL mode
     replStart(opts.repl.get.address, opts.repl.get.port.parseInt())

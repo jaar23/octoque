@@ -4,3 +4,4 @@ octoque
 octoque.adm.log
 otq-*.cache
 otq-*.log
+*.db

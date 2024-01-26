@@ -209,7 +209,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
         of SUBSCRIBE:
           if server.proceedCheck(username, role, qheader.topic, TRead):
             server.proceed(client)
-            server.subscribe(client, qheader.topic)
+            {.cast(gcsafe).}:
+              server.subscribe(client, qheader.topic)
             client.close()
             debug "subscription close"
             break
@@ -234,7 +235,8 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
             server.listtopic(client, qheader)
           else: unauthorized = true
         of ACKNOWLEDGE:
-          server.acknowledge(qheader)
+          {.cast(gcsafe).}:
+            server.acknowledge(qheader)
           #server.proceed(client, "ACKNOWLEDGE")
         of CONNECT:
           let (r, authenticated) = server.connect(client, qheader)
