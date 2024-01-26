@@ -23,7 +23,6 @@ type
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
     store {.guard: storeLock.}: Deque[ref QMessage]
-    #storageManager: ref StorageManager
    
 
 proc name*(qtopic: ref QTopic): string =
@@ -51,9 +50,6 @@ proc storeData (qtopic: ref QTopic, data: string): void =
     if qtopic == nil:
       storeCond.wait(storeLock)
     let queueDateTime = getTime().toUnixFloat()
-    # if qtopic.connectionType != PUBSUB:
-      # let id = qtopic.storageManager.saveQueueData(data, queueDateTime,
-      #     qtopic.base64Encoded, "")
     let id = queueDateTime.toInt()
     let qmsg = newQMessageRef(id, qtopic.name, data, queueDateTime,
         qtopic.base64Encoded)
@@ -61,10 +57,6 @@ proc storeData (qtopic: ref QTopic, data: string): void =
       let parcel = newParcel(id, qtopic.name, qmsg[], QUEUE)
       storageManager.manager.sendParcel(parcel)
     qtopic.store.addLast(qmsg)
-    # else:
-    #  let qmsg = newQMessageRef(0, qtopic.name, data, queueDateTime,
-    #      qtopic.base64Encoded)
-    #  qtopic.store.addLast(qmsg)
     #  AOF
     # qtopic.enqlog(qmsg.toJSON() & "\r\n")
     debug "store new data into " & qtopic.name
@@ -233,7 +225,6 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
 
   try:
     spawn qsubs.run()
-    #discard qsubs.ping()
     sleep(100)
     while true:
       ## client should response to ping
@@ -241,32 +232,12 @@ proc subscribe*(qtopic: ref QTopic, subscriber: ref Subscriber): void =
       let pong = qsubs.ping()
       if not pong:
         break
-      # var recvData = ""
-      # var queuedDateTime = 0.0
-      # withLock storeLock:
-      #   if qtopic.store.len != 0:
-      #     let recvMsg = qtopic.store.popFirst()
-      #     recvData = recvMsg.data()
-      #     queuedDateTime = recvMsg.queuedDateTime()
-      # if recvData != "":
       withLock subscLock:
-        # if recvData != "":
-        #   subscCond.wait(subscLock)
         for sbr in qtopic.subscriptions:
-          # let id = qtopic.storageManager.saveQueueData(recvData, queuedDateTime, 
-          #                                              qtopic.base64Encoded, sbr.connectionIp)
-          # let id = queuedDateTime.toInt()
-          # let qmsg = newQMessageRef(id, qtopic.name, recvData, queuedDateTime, 
-          #                           qtopic.base64Encoded)
-          # let parcel = newParcel(id, qtopic.name, qmsg[], QUEUE)
-          # storageManager.manager.sendParcel(parcel)
           withLock storeLock:
             if qtopic.store.len != 0:
               let recvMsg = qtopic.store.popFirst()
               sbr.push(recvMsg.toJSON())
-              # let sent = sbr.trySend(recvMsg.toJSON())
-              # if not sent:
-              #   qtopic.store.addLast(recvMsg)
             storeCond.signal()
         subscCond.signal()
   except:

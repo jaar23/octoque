@@ -108,10 +108,9 @@ proc saveQueueData*(topicStore: ref TopicStorage, id: int, data: string, queuedD
                                 (id, data, queued_dt, consumed_dt, b64_encoded, client)
                                 VALUES
                                 (?, ?, ?, ?, ?, ?)
-                                """, id, data, queuedDateTime, 0.0,
-        base64Encoded, clientIp)
+                                """, id, data, queuedDateTime, 0.0, base64Encoded, clientIp)
     if id == -1:
-      raise newException(StorageError, "Unable to persist queue data")
+      raise newException(StorageError, &"unable to persist queue data, {data}")
 
     result = id
   except:
@@ -162,9 +161,25 @@ proc getUnconsumedQueueData*(topicStore: ref TopicStorage): seq[QMessage] =
       let base64Encoded = parseBool(row[4])
       result.add(newQMessage(topicStore.topic, id, data, queuedDateTime,
           consumedDateTime, base64Encoded))
-
   except:
     error &"storage manager error, {getCurrentExceptionMsg()}"
+
+
+proc cleanUpData*(topicStore: ref TopicStorage): bool =
+  try:
+    topicStore.db.exec(sql"DROP TABLE IF EXISTS queue")
+    topicStore.db.exec(sql"""CREATE TABLE queue (
+                     id          INTEGER PRIMARY KEY,
+                     data        TEXT NOT NULL,
+                     queued_dt   DECIMAL(18,10),
+                     consumed_dt DECIMAL(18, 10),
+                     b64_encoded INTEGER,
+                     client      VARCHAR(255)
+                    )""")
+    return true
+  except:
+    error &"storage manager error, {getCurrentExceptionMsg()}"
+    return false
 
 
 proc initStorageManager*(): ref StorageManager =
@@ -212,8 +227,11 @@ proc parcelCollector*(sm: ref StorageManager) {.thread.} =
       elif parcel.operation == CONSUMED:
         discard ts.get.consumedQueueData(parcel.messageId)
         debug(&"{$parcel.messageId} is consumed")
-      # elif parcel.operation == CLEANUP:
-      #
+      elif parcel.operation == CLEANUP:
+        debug &"clean up {parcel.topic} persistence"
+        let cleaned = ts.get.cleanUpData()
+        if not cleaned:
+          raise newException(StorageError, "unable to clean up {parcel.topic} persistence")
       else:
         raise newException(ParcelError, "invalid parcel operation")
   except:
@@ -243,7 +261,7 @@ proc sendParcel*(sm: ref StorageManager, parcel: Parcel): void =
       raise newException(ParcelError, "storage manager is not running")
     let sent = storageChannel.trySend(parcel)
     if not sent:
-      raise newException(ParcelError, "unable to persist queue message")
+      raise newException(ParcelError, &"failed to send parcel {parcel}")
   except:
     error &"storage manager error, {getCurrentExceptionMsg()}"
 
