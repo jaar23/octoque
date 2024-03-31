@@ -23,7 +23,7 @@ type
     subscriptions {.guard: subscLock.}: seq[ref Subscriber]
     topicConnectionType: ConnectionType
     store {.guard: storeLock.}: Deque[ref QMessage]
-   
+
 
 proc name*(qtopic: ref QTopic): string =
   qtopic.name

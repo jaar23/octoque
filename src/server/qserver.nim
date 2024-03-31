@@ -3,7 +3,7 @@ import message, errcode, auth
 import net, options, strutils, strformat, threadpool, sugar, sequtils
 import octolog
 
-# 4mb maximum 
+# 4mb maximum
 const MAX_CONNLINE_LENGTH = 4_000_000
 
 type
@@ -95,7 +95,7 @@ proc response(server: QueueServer, client: Socket, msgSeq: Option[seq[
 proc store(server: QueueServer, client: Socket, qheader: QHeader): void =
   if qheader.transferMethod == BATCH:
     for row in 0..<qheader.payloadRows.int():
-      let msg = client.recvLine(maxLength=MAX_CONNLINE_LENGTH)
+      let msg = client.recvLine(maxLength = MAX_CONNLINE_LENGTH)
       let stored = server.queue.enqueue(qheader.topic, msg)
       if stored.isSome and qheader.command == PUTACK:
         client.send("SUCCESS\r\L" & $stored.get)
@@ -222,7 +222,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
           if server.proceedCheck(username, role, qheader.topic, TClear):
             server.proceed(client)
             server.clear(client, qheader)
-          else: unauthorized = true 
+          else: unauthorized = true
         of NEW:
           if server.proceedCheck(username, role, qheader.topic, TNew):
             server.proceed(client)
@@ -256,7 +256,7 @@ proc execute(server: QueueServer, client: Socket): void {.thread.} =
 
         if unauthorized: server.decline(client, $UNAUTHORIZED_ACCESS)
 
-      else: 
+      else:
         break
       server.endofresp(client)
 

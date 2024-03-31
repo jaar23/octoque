@@ -49,10 +49,6 @@ proc ping*(subscriber: ref Subscriber): bool =
   let ack = subscriber.connection.recvLine()
   if ack != "":
     subscriber.disconnected = false
-    return true
-  else:
-    subscriber.disconnected = true
-    return false
 
 
 proc parseAck(subscriber: ref Subscriber, line: string): seq[string]  =
@@ -64,18 +60,19 @@ proc readUntil(conn: Socket, symbol: string): string =
   var data = ""
   var reached = false
   while not reached:
-    var recvData = conn.recv(1, timeout=5000)
+    var recvData = conn.recv(1, timeout = 5000)
     data = data & recvData
     if data.contains(symbol):
       reached = true
   return data
 
 
-proc readUntil(conn: Socket, sw: string, ew: string, stopWhen: seq[string]): string =
+proc readUntil(conn: Socket, sw: string, ew: string, stopWhen: seq[
+    string]): string =
   var data = ""
   var reached = false
   while not reached:
-    var recvData = conn.recv(1, timeout=10000)
+    var recvData = conn.recv(1, timeout = 10000)
     data = data & recvData
     if data.startsWith(sw) and data.endsWith(ew):
       reached = true
@@ -89,7 +86,7 @@ proc tryAck*(subscriber: ref Subscriber): void =
   let retryLimit = 5
   var retry = 0
   while retry < retryLimit:
-    var ack = readUntil(subscriber.connection, 
+    var ack = readUntil(subscriber.connection,
                         "OTQ ACK", "\r\L", @["REPLPONG\r\L", "PONG\r\L"])
     # info &"ack readuntil: {ack}"
     try:
@@ -104,7 +101,7 @@ proc tryAck*(subscriber: ref Subscriber): void =
         {.cast(gcsafe).}:
           let parcel = newParcel(messageId, topic, CONSUMED)
           storageManager.manager.sendParcel(parcel)
-        retry = retryLimit + 1 
+        retry = retryLimit + 1
     except:
       error "failed to process message acknowledgement"
       error getCurrentExceptionMsg()
