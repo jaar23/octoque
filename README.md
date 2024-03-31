@@ -3,6 +3,7 @@
 *Note* Threadpool is deprecated, the project is in the middle of migrating to use different thread lib.
 
 *Note*  queue message persistent strategy is unsafe for now.
+
 ---
 
 octoque is a simple message queue server implemented in nim. The initiative of creating octoque is, learn by doing, a lot of the features implemented here might not be the best approach but it should be usable. It works similar to redis, but acting more towards a message queue.
